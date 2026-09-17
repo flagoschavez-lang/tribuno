@@ -10,7 +10,7 @@ import { getAssetOrFallback } from '../data/custom';
 import { formatChange, relativeTime, type Article, type Asset } from '../data/markets';
 import { useI18n } from '../i18n';
 
-const VIP_CHECKOUT_URL = '';
+const VIP_CHECKOUT_URL = 'https://www.paypal.com/ncp/payment/Q29PJK54LSGRE';
 
 interface BaseProps { onClose: () => void }
 
@@ -179,7 +179,7 @@ export function SpaceDialog({ onClose, onAsset, onArticle }: BaseProps & { onAss
         <div className="space-panel">
           <div className={`vip-card ${isVip ? 'active' : ''}`}><Crown size={26} /><div><strong>{t('space.vipTitle')}</strong><span>{isVip ? t('space.vipActiveDesc') : t('space.vipDesc')}</span></div><span className="vip-price">{t('space.vipPrice')}<span>{t('space.vipPerMonth')}</span></span></div>
           <ul className="vip-perks"><li>{t('space.vipPerk1')}</li><li>{t('space.vipPerk2')}</li><li>{t('space.vipPerk3')}</li></ul>
-          {isVip ? <p className="space-hint">{t('space.vipManage')}</p> : (VIP_CHECKOUT_URL ? <a className="primary-button vip-cta" href={VIP_CHECKOUT_URL} target="_blank" rel="noopener noreferrer"><Crown size={16} />{t('space.activateVip')}</a> : <div className="privacy-note"><Info size={15} /><span>{t('space.vipPending')}</span></div>)}
+          {isVip ? <p className="space-hint">{t('space.vipManage')}</p> : (VIP_CHECKOUT_URL ? <><a className="primary-button vip-cta" href={VIP_CHECKOUT_URL} target="_blank" rel="noopener noreferrer"><Crown size={16} />{t('space.activateVip')}</a><p className="space-hint">{t('space.vipPayHint')}</p></> : <div className="privacy-note"><Info size={15} /><span>{t('space.vipPending')}</span></div>)}
           {isVip && <><h3 className="dialog-section-title">{t('space.vipNews')}</h3><div className="space-list">{vipNews.length ? vipNews.map((item: FeedItem) => { const art = articleFromFeed(item, lang); return <button key={item.id} className="space-row space-news-row" onClick={() => onArticle(art)}><Bookmark size={16} /><span><strong>{item.title}</strong><small>{item.source ? `${t('article.sourcePrefix', { source: item.source })} \u00b7 ` : ''}{relativeTime(item.createdAt)}</small></span><span /></button>; }) : <p className="space-hint">{t('space.noVipNews')}</p>}</div></>}
         </div>
       )}
