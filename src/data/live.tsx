@@ -66,7 +66,7 @@ function noise(): number {
 let feed: FeedItem[] = [];
 let feedGeneratedAt = 0;
 
-const FEATURED = ['SPX', 'NDX', 'IBEX', 'DAX', 'CAC', 'BTCUSD', 'ETHUSD', 'EURUSD', 'USDJPY', 'GC1!', 'CL1!', 'NVDA', 'TSLA', 'AAPL', 'US10Y', 'DE10Y'];
+const FEATURED = ['SPX', 'NDX', 'IBEX', 'DAX', 'CAC', 'BTCUSD', 'ETHUSD', 'EURUSD', 'USDJPY', 'GC1!', 'CL1!', 'NVDA', 'TTWO', 'TSLA', 'AAPL', 'US10Y', 'DE10Y'];
 
 function syntheticFeed(now: number): FeedItem[] {
   const items: FeedItem[] = [];
