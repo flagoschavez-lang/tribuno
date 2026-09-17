@@ -1,5 +1,6 @@
--- Tribuno: esquema de cuentas, espacio privado, resenas, informes y VIP
+-- Tribuno: esquema de cuentas, espacio privado, resenas e informes.
 -- Pega TODO este contenido en Supabase -> SQL Editor -> New query -> Run.
+-- Es idempotente: puedes ejecutarlo varias veces sin error.
 
 -- 1) Perfiles ---------------------------------------------------------------
 create table if not exists public.profiles (
@@ -78,21 +79,5 @@ create policy "reports_update_own" on public.reports for update using (auth.uid(
 drop policy if exists "reports_delete_own" on public.reports;
 create policy "reports_delete_own" on public.reports for delete using (auth.uid() = user_id);
 
--- 5) VIP: solo lectura para el usuario; solo el servicio puede activarlo ----
---    Un trigger impide que un usuario se regale el VIP desde la web.
-create or replace function public.protect_is_vip()
-returns trigger
-language plpgsql
-security definer
-as $$
-begin
-  if new.is_vip is distinct from old.is_vip and auth.role() <> 'service_role' then
-    new.is_vip := old.is_vip;
-  end if;
-  return new;
-end;
-$$;
-
-drop trigger if exists protect_is_vip on public.profiles;
-create trigger protect_is_vip before update on public.profiles
-for each row execute function public.protect_is_vip();
+-- Nota VIP: el campo profiles.is_vip solo se cambia desde el panel de Supabase
+-- (Table Editor) o con la clave de servicio. La web nunca lo activa sola.
