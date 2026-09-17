@@ -253,7 +253,7 @@ export function NewsDialog({ onClose, onArticle, feed }: BaseProps & { onArticle
   const [filter, setFilter] = useState('latest');
   const { t, lang } = useI18n();
   const live = [...feed].sort((a, b) => b.createdAt - a.createdAt);
-  const news = filter === 'editorial' ? [] : live.filter((item) => filter === 'latest' || item.category === filter);
+  const news = filter === 'editorial' ? [] : live.filter((item) => filter === 'latest' || item.categoryId === filter);
   const filters = [
     { id: 'latest', label: t('newsModal.latest') },
     { id: 'markets', label: t('newsModal.markets') },

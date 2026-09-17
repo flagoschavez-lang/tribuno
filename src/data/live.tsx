@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { ASSETS, type Asset, type AssetCategory, formatChange } from './markets';
 import { getAnyAsset } from './custom';
+import { fetchAvNews } from './alpha';
 
 export interface LiveQuote {
   price: number;
@@ -17,6 +18,7 @@ export interface LiveQuote {
 export interface FeedItem {
   id: string;
   category: string;
+  categoryId?: string;
   title: string;
   summary: string;
   assetId: string;
@@ -85,29 +87,35 @@ function syntheticFeed(now: number): FeedItem[] {
     const delta = formatChange(pct);
     let title: string;
     let category: string;
+    let categoryId: string;
     let summary: string;
     if (asset.category === 'crypto') {
       category = 'Cripto';
+      categoryId = 'crypto';
       title = `${asset.shortName} ${verb} un ${delta} y se negocia en ${priceText} ${asset.currency}`;
       summary = `El activo digital ${asset.name} mantiene la atenci\u00f3n del mercado con un movimiento constante durante la \u00faltima hora.`;
     } else if (asset.category === 'forex') {
       category = 'Divisas';
+      categoryId = 'forex';
       title = `${asset.id} ${dir} al ${delta} con el foco en los bancos centrales`;
       summary = 'El cruce de divisas ajusta posiciones mientras los operadores revisan los diferenciales de tipos y la agenda macroecon\u00f3mica.';
     } else if (asset.category === 'futures') {
       category = 'Materias primas';
+      categoryId = 'commodities';
       title = `${asset.shortName} ${verb} un ${delta} y se acerca a m\u00e1ximos de la sesi\u00f3n`;
       summary = 'Los contratos de futuros reflejan el pulso de la oferta y la demanda en un d\u00eda de actividad sostenida.';
     } else if (asset.category === 'indices') {
       category = 'Mercados';
+      categoryId = 'markets';
       title = `${asset.shortName} ${dir} un ${delta}, en m\u00e1ximos t\u00e9cnicos de la jornada`;
       summary = `El \u00edndice ${asset.name} cotiza con cambios moderados mientras los inversores asimilan las \u00faltimas referencias macroecon\u00f3micas.`;
     } else {
       category = 'Renta variable';
+      categoryId = 'markets';
       title = `${asset.shortName} cotiza en ${priceText} ${asset.currency} y ${verb} un ${delta}`;
       summary = `La compa\u00f1\u00eda ${asset.name} es uno de los valores m\u00e1s seguidos de la sesi\u00f3n, con un volumen de negocio por encima de su media reciente.`;
     }
-    items.push({ id: `${asset.id}-${Math.round(now / 11000)}-${round}`, category, title, summary, assetId: asset.id, createdAt: now });
+    items.push({ id: `${asset.id}-${Math.round(now / 11000)}-${round}`, category, categoryId, title, summary, assetId: asset.id, createdAt: now });
   }
   return items;
 }
@@ -130,6 +138,15 @@ function matchAssetId(tickers: unknown, fallback: string): string {
   return getAnyAsset(fallback) ? fallback : 'SPX';
 }
 
+function categoryIdForDisplay(category: string): string {
+  switch (category) {
+    case 'Cripto': return 'crypto';
+    case 'Divisas': return 'forex';
+    case 'Materias primas': return 'commodities';
+    default: return 'markets';
+  }
+}
+
 async function fetchNews(): Promise<FeedItem[]> {
   const settled = await Promise.allSettled(NEWS_TOPICS.map(async (topic) => {
     const controller = new AbortController();
@@ -145,6 +162,7 @@ async function fetchNews(): Promise<FeedItem[]> {
         .map((entry: { uuid?: unknown; link?: unknown; title?: unknown; publisher?: unknown; providerPublishTime?: unknown; relatedTickers?: unknown; thumbnail?: { resolutions?: { url?: string }[] } }): FeedItem => ({
           id: String(entry.uuid ?? entry.link ?? `${topic.category}-${Math.random()}`),
           category: topic.category,
+          categoryId: categoryIdForDisplay(topic.category),
           title: String(entry.title),
           summary: entry.publisher ? `Titular publicado por ${String(entry.publisher)}.` : 'Titular de actualidad.',
           assetId: matchAssetId(entry.relatedTickers, topic.fallback),
@@ -170,8 +188,15 @@ async function refreshFeed() {
   if (feedBusy) return;
   feedBusy = true;
   try {
-    const real = await fetchNews();
-    feed = real.length ? real : syntheticFeed(Date.now());
+    const [real, enhanced] = await Promise.allSettled([fetchNews(), fetchAvNews()]);
+    const yahooItems = real.status === 'fulfilled' ? real.value : [];
+    const source = yahooItems.length ? yahooItems : syntheticFeed(Date.now());
+    const avItems = enhanced.status === 'fulfilled' ? enhanced.value : [];
+    const seen = new Set<string>();
+    feed = [...source, ...avItems]
+      .filter((item) => { const key = item.title.toLowerCase(); if (seen.has(key)) return false; seen.add(key); return true; })
+      .sort((a, b) => b.createdAt - a.createdAt)
+      .slice(0, FEED_MAX);
     feedGeneratedAt = Date.now();
   } catch {
     feed = syntheticFeed(Date.now());

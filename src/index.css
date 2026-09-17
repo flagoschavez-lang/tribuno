@@ -199,6 +199,14 @@ button.quote-title:hover { color: var(--blue); }
 .stock-region-selector img { border-radius: 50%; }
 .stock-region-selector:hover { color: var(--blue); }
 .market-table-scroll { overflow-x: auto; scrollbar-width: thin; scrollbar-color: var(--line-strong) transparent; }
+.market-chips { display: flex; align-items: center; gap: 6px; overflow-x: auto; padding-bottom: 2px; margin-bottom: 12px; scrollbar-width: none; }
+.market-chips::-webkit-scrollbar { display: none; }
+.market-chip { display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; padding: 5px 10px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); font-size: 9.5px; color: var(--muted); }
+.market-chip strong { color: var(--text); font-weight: 600; }
+.market-chip i { font-style: normal; font-weight: 600; font-variant-numeric: tabular-nums; }
+.market-chip-button { cursor: pointer; text-align: left; transition: border-color 150ms ease, color 150ms ease; }
+.market-chip-button span { max-width: 130px; overflow: hidden; text-overflow: ellipsis; color: var(--muted); }
+.market-chip-button:hover { border-color: var(--blue); color: var(--blue); }
 .market-table { width: 100%; min-width: 735px; table-layout: auto; font-variant-numeric: tabular-nums; }
 .market-table th { text-align: right; border-bottom: 1px solid var(--line); padding: 0 12px 11px 5px; font-size: 10px; font-weight: 450; color: var(--muted); white-space: nowrap; }
 .market-table th > button { display: inline-flex; align-items: center; gap: 4px; }

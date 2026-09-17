@@ -8,10 +8,11 @@ import AssetQuote from './components/AssetQuote';
 import { AlertsDialog, ArticleDialog, AssetDialog, CalendarDialog, CommunityDialog, HelpDialog, NewsDialog, ProfileDialog, SearchDialog, WatchlistDialog, articleFromFeed, type PriceAlert, type Profile } from './components/MarketDialogs';
 import { SpaceDialog } from './components/AccountDialogs';
 import useStoredState from './utils/useStoredState';
-import { LiveProvider, useLive } from './data/live';
+import { LiveProvider, useLive, attachCustomSymbol } from './data/live';
 import { AuthProvider, useAuth } from './data/auth';
-import { getAssetOrFallback, useCustom } from './data/custom';
+import { getAssetOrFallback, registerCustom, useCustom } from './data/custom';
 import { I18nProvider, useI18n } from './i18n';
+import { useAvMovers, useAvSectors, type AvMover } from './data/alpha';
 
 type DialogView =
   | { type: 'search'; adding?: boolean }
@@ -68,6 +69,8 @@ function App() {
 
   const { assets: customAssets } = useCustom();
   const { user } = useAuth();
+  const avSectors = useAvSectors();
+  const avMovers = useAvMovers();
   const selectedAsset = getAssetOrFallback(selectedId);
   const validWatchlist = useMemo(() => Array.isArray(watchlist) ? watchlist.filter((id) => ASSETS.some((asset) => asset.id === id) || customAssets.some((asset) => asset.id === id)) : DEFAULT_WATCHLIST, [watchlist, customAssets]);
   const notify = useCallback((message: string) => setToast({ message, id: Date.now() }), []);
@@ -111,6 +114,7 @@ function App() {
   function changeMoversFilter(next: MoversFilter) { setMoversFilter(next); setShowAll(false); setSort({ key: next === 'active' ? 'volume' : 'change', direction: next === 'losers' ? 'asc' : 'desc' }); }
   function sortColumn(key: SortKey) { setSort((current) => ({ key, direction: current.key === key && current.direction === 'desc' ? 'asc' : 'desc' })); }
   function openAsset(asset: Asset) { setView({ type: 'asset', assetId: asset.id }); }
+  function openAvMover(mover: AvMover) { const asset = registerCustom({ symbol: mover.symbol, name: mover.name, exchange: 'NASDAQ', quoteType: 'EQUITY', price: mover.price, currency: 'USD' }); attachCustomSymbol(asset.id); openAsset(getAssetOrFallback(asset.id)); }
   function openArticle(article: Article) { setView({ type: 'article', articleId: article.id }); }
   function goToNews() { setMenu(null); document.getElementById('noticias')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
   function goToScreener() { selectCategory('stocks'); window.setTimeout(() => document.getElementById('movimientos')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50); }
@@ -183,6 +187,8 @@ function App() {
             <section className="movers-section" id="movimientos">
               <div className="section-heading"><h2>{tableHeading}</h2><button className="text-button section-more" onClick={() => setShowAll(!showAll)}>{showAll ? t('movers.showLess') : t('movers.showAll')}<ArrowRight size={16} /></button></div>
               <div className="movers-toolbar"><div className="movers-tabs" aria-label={t('movers.aria')}>{([{ id: 'active', label: t('movers.active') }, { id: 'gainers', label: t('movers.gainers') }, { id: 'losers', label: t('movers.losers') }] as const).map((filter) => <button key={filter.id} className={moversFilter === filter.id ? 'active' : ''} aria-pressed={moversFilter === filter.id} onClick={() => changeMoversFilter(filter.id)}>{filter.label}</button>)}</div>{tableCategory === 'stocks' && <div className="menu-root" data-menu-root><button className="stock-region-selector" onClick={() => setMenu(menu === 'stock-region' ? null : 'stock-region')} aria-expanded={menu === 'stock-region'}>{stockRegion === 'all' ? <Globe2 size={15} /> : <img src={`https://flagcdn.com/${stockRegion === 'us' ? 'us' : 'eu'}.svg`} width="17" height="17" alt="" />}<span>{t(`region.${stockRegion}`)}</span><ChevronDown size={13} /></button>{menu === 'stock-region' && <div className="dropdown-menu region-menu">{([{ id: 'us', label: t('region.us') }, { id: 'europe', label: t('region.europe') }, { id: 'all', label: t('region.all') }] as const).map((item) => <button key={item.id} onClick={() => { setStockRegion(item.id); setMenu(null); }} className={stockRegion === item.id ? 'chosen' : ''}>{item.label}{stockRegion === item.id && <Check size={15} />}</button>)}</div>}</div>}</div>
+              {avSectors && <div className="market-chips" aria-label={t('sectors.title')}>{avSectors.map((sector) => <span className="market-chip" key={sector.name}><strong>{sector.name}</strong><i className={sector.change >= 0 ? 'positive' : 'negative'}>{sector.change >= 0 ? '+' : ''}{sector.change.toFixed(1)}%</i></span>)}</div>}
+              {avMovers && <div className="market-chips movers-chips" aria-label={t('top.title')}>{[...avMovers.gainers.slice(0, 2), ...avMovers.active.slice(0, 2)].map((mover) => <button className="market-chip market-chip-button" key={`${mover.symbol}-${mover.price}`} onClick={() => openAvMover(mover)} title={`${mover.name} - ${mover.price}`}><strong>{mover.symbol}</strong><span>{mover.name}</span><i className={mover.changePercent >= 0 ? 'positive' : 'negative'}>{mover.changePercent >= 0 ? '+' : ''}{mover.changePercent.toFixed(1)}%</i></button>)}</div>}
               <div className="market-table-scroll"><table className="market-table"><thead><tr><th className="favorite-cell"><Star size={13} /></th>{([{ key: 'symbol', label: t('table.symbol') }, { key: 'price', label: t('table.price') }, { key: 'change', label: t('table.change') }, { key: 'volume', label: t('table.volume') }, { key: 'marketCap', label: t('table.marketCap') }] as const).map((column) => <th key={column.key} className={column.key === 'symbol' ? 'symbol-column' : ''} aria-sort={sort.key === column.key ? sort.direction === 'desc' ? 'descending' : 'ascending' : 'none'}><button onClick={() => sortColumn(column.key)}>{column.label}{sort.key === column.key ? sort.direction === 'desc' ? <ArrowDown size={12} /> : <ArrowUp size={12} /> : <ArrowDownUp className="sort-icon" size={11} />}</button></th>)}<th className="sparkline-column">{t('table.last7')}</th></tr></thead><tbody>{tableAssets.slice(0, showAll ? tableAssets.length : 5).map((asset) => { const live = liveOf(asset); return <tr key={asset.id} onClick={() => openAsset(live)}><td className="favorite-cell"><button className={`favorite-button ${validWatchlist.includes(asset.id) ? 'is-favorite' : ''}`} aria-label={t(validWatchlist.includes(asset.id) ? 'aria.favRemove' : 'aria.favAdd', { symbol: asset.symbol })} aria-pressed={validWatchlist.includes(asset.id)} onClick={(event) => { event.stopPropagation(); toggleWatch(asset.id); }}><Star size={15} fill={validWatchlist.includes(asset.id) ? 'currentColor' : 'none'} /></button></td><td><button className="table-symbol" onClick={(event) => { event.stopPropagation(); openAsset(live); }}><MarketLogo asset={live} size={33} /><span><strong>{live.symbol}</strong><small>{live.name}</small></span></button></td><td className="price-cell">{formatPrice(live.price, live.decimals)} <span>{live.currency}</span></td><td className={`change-cell ${live.change >= 0 ? 'positive' : 'negative'}`}>{formatChange(live.change)}</td><td>{formatCompact(live.volume)}</td><td>{formatCompact(live.marketCap)}</td><td className="sparkline-cell"><Sparkline asset={asset} width={116} height={32} period="7D" onOpen={() => openAsset(live)} /></td></tr>; })}</tbody></table></div>
               <div className="table-caption"><span>{t('table.caption')}</span><span>{t('table.count', { n: Math.min(showAll ? tableAssets.length : 5, tableAssets.length), m: tableAssets.length })}</span></div>
             </section>
