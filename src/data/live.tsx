@@ -21,6 +21,9 @@ export interface FeedItem {
   summary: string;
   assetId: string;
   createdAt: number;
+  source?: string;
+  url?: string;
+  image?: string;
 }
 
 interface TickState {
@@ -33,13 +36,13 @@ interface TickState {
   real: boolean;
 }
 
-const POLL_WINDOW_MS = 40000;
-const BATCH_SIZE = 11;
-const TOTAL_INTERVAL_MS = 9000;
-const TICK_MS = 1200;
-const TRAIL_LENGTH = 240;
-const FEED_INTERVAL_MS = 11000;
-const FEED_MAX = 14;
+const POLL_WINDOW_MS = 100000;
+const BATCH_SIZE = 12;
+const REFRESH_INTERVAL_MS = 60000;
+const NEWS_INTERVAL_MS = 60000;
+const TICK_MS = 1000;
+const TRAIL_LENGTH = 300;
+const FEED_MAX = 16;
 
 const subscriptions = new Set<string>();
 const baseByQuote = new Map<string, Asset>();
@@ -65,7 +68,7 @@ let feedGeneratedAt = 0;
 
 const FEATURED = ['SPX', 'NDX', 'IBEX', 'DAX', 'CAC', 'BTCUSD', 'ETHUSD', 'EURUSD', 'USDJPY', 'GC1!', 'CL1!', 'NVDA', 'TSLA', 'AAPL', 'US10Y', 'DE10Y'];
 
-function buildFeed(now: number): FeedItem[] {
+function syntheticFeed(now: number): FeedItem[] {
   const items: FeedItem[] = [];
   const chosen = FEATURED.filter((id) => getAnyAsset(id) !== undefined);
   for (let round = 0; round < 2 && items.length < 6; round++) {
@@ -86,11 +89,11 @@ function buildFeed(now: number): FeedItem[] {
     if (asset.category === 'crypto') {
       category = 'Cripto';
       title = `${asset.shortName} ${verb} un ${delta} y se negocia en ${priceText} ${asset.currency}`;
-      summary = `El activo digital ${asset.name} mantiene la atenci\u00f3n del mercado con un movimiento constante de varios d\u00e9cimas durante la \u00faltima hora.`;
+      summary = `El activo digital ${asset.name} mantiene la atenci\u00f3n del mercado con un movimiento constante durante la \u00faltima hora.`;
     } else if (asset.category === 'forex') {
       category = 'Divisas';
       title = `${asset.id} ${dir} al ${delta} con el foco en los bancos centrales`;
-      summary = `El cruce de divisas ajusta posiciones mientras los operadores revisan los diferenciales de tipos y la agenda macroecon\u00f3mica.`;
+      summary = 'El cruce de divisas ajusta posiciones mientras los operadores revisan los diferenciales de tipos y la agenda macroecon\u00f3mica.';
     } else if (asset.category === 'futures') {
       category = 'Materias primas';
       title = `${asset.shortName} ${verb} un ${delta} y se acerca a m\u00e1ximos de la sesi\u00f3n`;
@@ -106,8 +109,76 @@ function buildFeed(now: number): FeedItem[] {
     }
     items.push({ id: `${asset.id}-${Math.round(now / 11000)}-${round}`, category, title, summary, assetId: asset.id, createdAt: now });
   }
-  for (const stale of [...feed].slice(0, 2)) items.push(stale);
-  return items.slice(0, FEED_MAX);
+  return items;
+}
+
+const NEWS_TOPICS: { query: string; category: string; fallback: string }[] = [
+  { query: 'mercados financieros bolsa', category: 'Mercados', fallback: 'SPX' },
+  { query: 'bitcoin criptomonedas', category: 'Cripto', fallback: 'BTCUSD' },
+  { query: 'divisas euro dolar tipos', category: 'Divisas', fallback: 'EURUSD' },
+  { query: 'petroleo oro materias primas', category: 'Materias primas', fallback: 'CL1!' },
+];
+
+function matchAssetId(tickers: unknown, fallback: string): string {
+  if (Array.isArray(tickers)) {
+    for (const ticker of tickers) {
+      const symbol = String(ticker);
+      const asset = ASSETS.find((item) => item.quote === symbol || item.symbol === symbol || item.id === symbol);
+      if (asset) return asset.id;
+    }
+  }
+  return getAnyAsset(fallback) ? fallback : 'SPX';
+}
+
+async function fetchNews(): Promise<FeedItem[]> {
+  const settled = await Promise.allSettled(NEWS_TOPICS.map(async (topic) => {
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 9000);
+    try {
+      const url = `https://query1.finance.yahoo.com/v7/finance/search?q=${encodeURIComponent(topic.query)}&quotesCount=0&newsCount=10&lang=es-ES&region=ES`;
+      const response = await fetch(url, { signal: controller.signal });
+      if (!response.ok) return [] as FeedItem[];
+      const data = await response.json();
+      const news = Array.isArray(data?.news) ? data.news : [];
+      return news
+        .filter((entry: { title?: unknown }) => typeof entry?.title === 'string' && entry.title)
+        .map((entry: { uuid?: unknown; link?: unknown; title?: unknown; publisher?: unknown; providerPublishTime?: unknown; relatedTickers?: unknown; thumbnail?: { resolutions?: { url?: string }[] } }): FeedItem => ({
+          id: String(entry.uuid ?? entry.link ?? `${topic.category}-${Math.random()}`),
+          category: topic.category,
+          title: String(entry.title),
+          summary: entry.publisher ? `Titular publicado por ${String(entry.publisher)}.` : 'Titular de actualidad.',
+          assetId: matchAssetId(entry.relatedTickers, topic.fallback),
+          createdAt: typeof entry.providerPublishTime === 'number' ? entry.providerPublishTime * 1000 : Date.now(),
+          source: entry.publisher ? String(entry.publisher) : undefined,
+          url: typeof entry.link === 'string' ? entry.link : undefined,
+          image: entry.thumbnail?.resolutions?.[0]?.url ? String(entry.thumbnail.resolutions[0].url) : undefined,
+        }));
+    } finally {
+      window.clearTimeout(timeout);
+    }
+  }));
+  const merged = settled.flatMap((result) => (result.status === 'fulfilled' ? result.value : []));
+  const seen = new Set<string>();
+  return merged
+    .filter((item) => { const key = item.title.toLowerCase(); if (seen.has(key)) return false; seen.add(key); return true; })
+    .sort((a, b) => b.createdAt - a.createdAt)
+    .slice(0, FEED_MAX);
+}
+
+let feedBusy = false;
+async function refreshFeed() {
+  if (feedBusy) return;
+  feedBusy = true;
+  try {
+    const real = await fetchNews();
+    feed = real.length ? real : syntheticFeed(Date.now());
+    feedGeneratedAt = Date.now();
+  } catch {
+    feed = syntheticFeed(Date.now());
+    feedGeneratedAt = Date.now();
+  } finally {
+    feedBusy = false;
+  }
 }
 
 async function fetchQuote(symbol: string): Promise<LiveQuote | null> {
@@ -188,26 +259,24 @@ function tickSecond() {
 let timer: number | undefined;
 let tickTimer: number | undefined;
 let feedTimer: number | undefined;
-let cursor = 0;
 
-async function pollRotating() {
+async function pollAll() {
   const symbols = [...subscriptions];
-  if (!symbols.length) return;
-  if (cursor >= symbols.length) cursor = 0;
-  const batch = symbols.slice(cursor, cursor + BATCH_SIZE);
-  cursor += BATCH_SIZE;
-  if (batch.length) await refreshBatch(batch);
+  for (let i = 0; i < symbols.length; i += BATCH_SIZE) {
+    await refreshBatch(symbols.slice(i, i + BATCH_SIZE));
+  }
 }
 
 function ensurePolling() {
-  const symbols = [...subscriptions];
-  const batches = Math.ceil(symbols.length / BATCH_SIZE) || 1;
   if (timer === undefined) {
-    pollRotating();
-    timer = window.setInterval(pollRotating, Math.max(1800, TOTAL_INTERVAL_MS / batches));
+    void pollAll();
+    timer = window.setInterval(() => void pollAll(), REFRESH_INTERVAL_MS);
   }
   if (tickTimer === undefined) tickTimer = window.setInterval(tickSecond, TICK_MS);
-  if (feedTimer === undefined) feedTimer = window.setInterval(() => { feed = buildFeed(Date.now()); feedGeneratedAt = Date.now(); }, FEED_INTERVAL_MS);
+  if (feedTimer === undefined) {
+    void refreshFeed();
+    feedTimer = window.setInterval(() => void refreshFeed(), NEWS_INTERVAL_MS);
+  }
 }
 
 function stopWhenIdle() {
@@ -215,7 +284,6 @@ function stopWhenIdle() {
     if (timer !== undefined) { window.clearInterval(timer); timer = undefined; }
     if (tickTimer !== undefined) { window.clearInterval(tickTimer); tickTimer = undefined; }
     if (feedTimer !== undefined) { window.clearInterval(feedTimer); feedTimer = undefined; }
-    cursor = 0;
   }
 }
 
@@ -268,8 +336,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     disposed.current = false;
     syncAssets();
-    feed = buildFeed(Date.now());
-    feedGeneratedAt = Date.now();
+    void refreshFeed();
     const onTick = () => { if (!disposed.current) setVersion((value) => value + 1); };
     listeners.add(onTick);
     return () => {

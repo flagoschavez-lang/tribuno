@@ -295,6 +295,8 @@ export interface Article {
   readTime: string;
   assetId: string;
   body: string[];
+  source?: string;
+  url?: string;
 }
 
 export const ARTICLES: Article[] = [

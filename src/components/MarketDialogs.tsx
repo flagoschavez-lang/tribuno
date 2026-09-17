@@ -1,6 +1,6 @@
 import { useMemo, useState, type FormEvent, type KeyboardEvent } from 'react';
-import { ArrowDown, ArrowRight, ArrowUp, Bell, Bookmark, Check, CheckCheck, ChevronRight, Clock3, Globe2, Info, LockKeyhole, Plus, Search, ShieldCheck, Star, Trash2, TrendingUp, UserRound, X, RefreshCw } from 'lucide-react';
-import { ARTICLES, ASSETS, CATEGORIES, ECONOMIC_EVENTS, type Article, type Asset, type Category, formatChange, formatCompact, formatPrice, getAsset, relativeTime } from '../data/markets';
+import { ArrowDown, ArrowRight, ArrowUp, ArrowUpRight, Bell, Bookmark, Check, CheckCheck, ChevronRight, Clock3, Globe2, Info, LockKeyhole, Plus, Search, ShieldCheck, Star, Trash2, TrendingUp, UserRound, X, RefreshCw } from 'lucide-react';
+import { ARTICLES, ASSETS, CATEGORIES, ECONOMIC_EVENTS, type Article, type Asset, type Category, formatChange, formatCompact, formatPrice, relativeTime } from '../data/markets';
 import Modal from './Modal';
 import MarketLogo, { BrandMark } from './MarketLogo';
 import MarketChart, { type Period } from './MarketChart';
@@ -24,11 +24,13 @@ export function articleFromFeed(item: FeedItem): Article {
     category: item.category,
     title: item.title,
     summary: item.summary,
-    image: source.image,
-    alt: source.alt,
+    image: item.image ?? source.image,
+    alt: item.title,
     time: relativeTime(item.createdAt),
     readTime: '2 min',
     assetId: item.assetId,
+    source: item.source,
+    url: item.url,
     body: [
       `${asset.name} (${asset.symbol}) cotiza en ${priceText} ${asset.currency}, con un movimiento del ${formatChange(asset.change)} durante la sesi\u00f3n. La operativa mantiene la atenci\u00f3n de los participantes en un contexto de actividad sostenida.`,
       `El volumen negociado se sit\u00faa en ${formatCompact(asset.volume || 0)} y la referencia intrad\u00eda se actualiza de forma continua. El nivel de ${priceText} ${asset.currency} funciona como referencia inmediata para el activo.`,
@@ -216,14 +218,16 @@ export function WatchlistDialog({ onClose, ids, name, onRename, onChange, onAdd,
 }
 
 export function ArticleDialog({ article, onClose, onAsset, saved, onSave }: BaseProps & { article: Article; onAsset: (asset: Asset) => void; saved: boolean; onSave: () => void }) {
+  const asset = getAssetOrFallback(article.assetId);
   return (
     <Modal title="La perspectiva Tribuno" onClose={onClose} className="article-modal">
       <img className="article-hero" src={article.image} alt={article.alt} />
-      <div className="article-meta"><span>{article.category}</span><span>Tribuno Editorial</span><span>{article.readTime} de lectura</span></div>
+      <div className="article-meta"><span>{article.category}</span><span>{article.source ? `Fuente: ${article.source}` : 'Tribuno Editorial'}</span><span>{article.readTime} de lectura</span></div>
       <h1>{article.title}</h1><p className="article-summary">{article.summary}</p>
       <div className="article-body">{article.body.map((paragraph) => <p key={paragraph.slice(0, 30)}>{paragraph}</p>)}</div>
-      <div className="article-bottom"><button className="secondary-button" onClick={() => onAsset(getAsset(article.assetId))}><TrendingUp size={17} />Explorar {getAsset(article.assetId).shortName}<ArrowRight size={16} /></button><button className={`icon-button ${saved ? 'is-watched' : ''}`} onClick={onSave} aria-label={saved ? 'Quitar de noticias guardadas' : 'Guardar noticia'}><Bookmark size={20} fill={saved ? 'currentColor' : 'none'} /></button></div>
-      <div className="dialog-footnote"><Info size={15} />Contenido editorial con fines informativos. No constituye asesoramiento de inversi&oacute;n.</div>
+      {article.url && <a className="article-source-link" href={article.url} target="_blank" rel="noopener noreferrer">Leer la informaci&oacute;n original{article.source ? ` en ${article.source}` : ''}<ArrowUpRight size={15} /></a>}
+      <div className="article-bottom"><button className="secondary-button" onClick={() => onAsset(asset)}><TrendingUp size={17} />Explorar {asset.shortName}<ArrowRight size={16} /></button><button className={`icon-button ${saved ? 'is-watched' : ''}`} onClick={onSave} aria-label={saved ? 'Quitar de noticias guardadas' : 'Guardar noticia'}><Bookmark size={20} fill={saved ? 'currentColor' : 'none'} /></button></div>
+      <div className="dialog-footnote"><Info size={15} />Titular y enlace citados a su fuente original; el an&aacute;lisis es propio y con fines informativos. No constituye asesoramiento de inversi&oacute;n.</div>
     </Modal>
   );
 }
@@ -238,7 +242,7 @@ export function NewsDialog({ onClose, onArticle, feed }: BaseProps & { onArticle
       <div className="dialog-filter-tabs">{['Últimas', 'Mercados', 'Cripto', 'Divisas', 'Materias primas', 'Editorial'].map((category) => <button key={category} className={filter === category ? 'active' : ''} onClick={() => setFilter(category)}>{category}</button>)}</div>
       <div className="news-dialog-list">
         {filter === 'Editorial' ? ARTICLES.map((article) => <button key={article.id} className="news-dialog-item" onClick={() => onArticle(article)}><img src={article.image} alt={article.alt} /><span><small>{article.category} &middot; {article.readTime}</small><strong>{article.title}</strong><span>{article.summary}</span></span><ChevronRight size={18} /></button>)
-          : news.length ? news.map((item) => { const feedArticle = articleFromFeed(item); return <button key={item.id} className="news-dialog-item" onClick={() => onArticle(feedArticle)}><img src={feedArticle.image} alt={feedArticle.alt} /><span><small className="news-item-category">{item.category} &middot; <em>{relativeTime(item.createdAt)}</em></small><strong>{item.title}</strong><span>{item.summary}</span></span><ChevronRight size={18} /></button>; })
+          : news.length ? news.map((item) => { const feedArticle = articleFromFeed(item); return <button key={item.id} className="news-dialog-item" onClick={() => onArticle(feedArticle)}><img src={feedArticle.image} alt={feedArticle.alt} /><span><small className="news-item-category">{item.category} &middot; <em>{item.source ? `Fuente: ${item.source} \u00b7 ` : ''}{relativeTime(item.createdAt)}</em></small><strong>{item.title}</strong><span>{item.summary}</span></span><ChevronRight size={18} /></button>; })
           : <div className="empty-state"><Bookmark size={30} /><h3>Sin novedades en esta secci&oacute;n</h3><p>El feed se renueva continuamente; revisa &Uacute;ltimas noticias en unos instantes.</p></div>}
       </div>
     </Modal>
@@ -249,14 +253,19 @@ export function CommunityDialog({ onClose, onAsset }: BaseProps & { onAsset: (as
   const [filter, setFilter] = useState('Todas');
   const { liveOf } = useLive();
   const ideas = [
-    { name: 'Ana M.', handle: 'ana.markets', asset: 'SPX', category: '\u00cdndices', title: 'S&P 500: la importancia de mirar el contexto', text: 'Antes de seguir una tendencia, comparo la amplitud del mercado con el volumen. Un movimiento respaldado por m\u00e1s sectores cuenta una historia diferente.', color: '#e9e0fc' },
-    { name: 'Daniel R.', handle: 'dani.crypto', asset: 'BTCUSD', category: 'Cripto', title: 'Bitcoin y el valor de tener un plan', text: 'Los movimientos de corto plazo no deber\u00edan cambiar un horizonte de largo plazo. Estos son los niveles que estoy observando en mi escenario de base.', color: '#e2ede2' },
-    { name: 'Laura S.', handle: 'laura.invest', asset: 'NVDA', category: 'Acciones', title: 'Semiconductores: m\u00e1s all\u00e1 del titular', text: 'Los resultados y las expectativas no siempre avanzan al mismo ritmo. Mirar los m\u00e1rgenes junto a los ingresos ayuda a poner las valoraciones en perspectiva.', color: '#f4e6d7' },
+    { name: 'Ana Mar\u00edn', handle: 'ana.markets', asset: 'SPX', category: '\u00cdndices', title: 'S&P 500: la importancia de mirar el contexto', text: 'Antes de seguir una tendencia, comparo la amplitud del mercado con el volumen. Un movimiento respaldado por m\u00e1s sectores cuenta una historia muy distinta a uno aislado.', color: '#e9e0fc' },
+    { name: 'Daniel Rojas', handle: 'dani.crypto', asset: 'BTCUSD', category: 'Cripto', title: 'Bitcoin y el valor de tener un plan', text: 'Los movimientos de corto plazo no deber\u00edan cambiar un horizonte de largo plazo. Estos son los niveles que estoy observando en mi escenario de base, con el riesgo siempre definido.', color: '#e2ede2' },
+    { name: 'Laura S\u00e1nchez', handle: 'laura.invest', asset: 'NVDA', category: 'Acciones', title: 'Semiconductores: m\u00e1s all\u00e1 del titular', text: 'Los resultados y las expectativas no siempre avanzan al mismo ritmo. Mirar los m\u00e1rgenes junto a los ingresos ayuda a poner las valoraciones en perspectiva.', color: '#f4e6d7' },
+    { name: 'Marcos Pe\u00f1a', handle: 'mpena.forex', asset: 'EURUSD', category: 'Divisas', title: 'EUR/USD y el diferencial de tipos', text: 'Cuando el mercado cambia de expectativas sobre los bancos centrales, el cruce lo nota r\u00e1pido. Sigo el diferencial de tipos antes que el ruido intrad\u00eda.', color: '#e0ecf7' },
+    { name: 'Sof\u00eda Iglesias', handle: 'sofia.macro', asset: 'US10Y', category: 'Renta fija', title: 'La renta fija vuelve al centro del debate', text: 'El bono a diez a\u00f1os es la referencia que ordena el resto de activos. Un repunte de rentabilidad tensiona crecimiento y valoraciones casi al mismo tiempo.', color: '#f3e2ea' },
+    { name: 'Javier N\u00fa\u00f1ez', handle: 'javi.energy', asset: 'CL1!', category: 'Materias primas', title: 'Petr\u00f3leo: oferta, demanda y geopolitica', text: 'En energ\u00eda, los inventarios y las decisiones de producci\u00f3n pesan m\u00e1s que cualquier titular puntual. Prefiero reaccionar a los datos que anticiparlos.', color: '#f7f0d8' },
+    { name: 'Carla Dom\u00ednguez', handle: 'carla.etf', asset: 'SPY', category: 'Fondos', title: 'Indexarse no significa no analizar', text: 'Un ETF diversificado sigue siendo una decisi\u00f3n activa: eliges mercado, coste y horizonte. Reviso la composici\u00f3n al menos dos veces al a\u00f1o.', color: '#e6e6f5' },
+    { name: 'Tom\u00e1s Bravo', handle: 'tomas.riesgo', asset: 'IBEX', category: '\u00cdndices', title: 'Gesti\u00f3n del riesgo antes que rentabilidad', text: 'Defino el tama\u00f1o de cada posici\u00f3n antes de mirar el gr\u00e1fico. As\u00ed una buena idea no se convierte en un mal resultado por exceso de confianza.', color: '#dff0e6' },
   ].filter((idea) => filter === 'Todas' || idea.category === filter);
   return (
     <Modal title="Las ideas se ven mejor en comunidad" onClose={onClose} className="community-modal">
-      <p className="modal-intro">Otras miradas. Nuevas perspectivas. Tu propio criterio.</p><div className="dialog-filter-tabs">{['Todas', '\u00cdndices', 'Cripto', 'Acciones'].map((category) => <button key={category} className={filter === category ? 'active' : ''} onClick={() => setFilter(category)}>{category}</button>)}</div>
-      <div className="community-ideas">{ideas.map((idea) => <article key={idea.asset} className="community-idea" tabIndex={0} role="button" onClick={() => onAsset(liveOf(getAsset(idea.asset)))} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onAsset(liveOf(getAsset(idea.asset))); } }}><div className="idea-author"><span style={{ background: idea.color }}><UserRound size={19} /></span><div><strong>{idea.name}</strong><small>@{idea.handle}</small></div><span className="idea-category">{idea.category}</span></div><h3>{idea.title}</h3><p>{idea.text}</p><button className="text-button" tabIndex={-1} onClick={(event) => { event.stopPropagation(); onAsset(liveOf(getAsset(idea.asset))); }}>Explorar {idea.asset}<ArrowRight size={15} /></button></article>)}</div><div className="dialog-footnote"><Info size={15} />Perfiles e ideas generados para ilustrar la experiencia de comunidad. No es asesoramiento financiero.</div>
+      <p className="modal-intro">Otras miradas. Nuevas perspectivas. Tu propio criterio.</p><div className="dialog-filter-tabs">{['Todas', '\u00cdndices', 'Cripto', 'Acciones', 'Divisas', 'Materias primas'].map((category) => <button key={category} className={filter === category ? 'active' : ''} onClick={() => setFilter(category)}>{category}</button>)}</div>
+      <div className="community-ideas">{ideas.map((idea) => <article key={idea.handle} className="community-idea" tabIndex={0} role="button" onClick={() => onAsset(liveOf(getAssetOrFallback(idea.asset)))} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onAsset(liveOf(getAssetOrFallback(idea.asset))); } }}><div className="idea-author"><span style={{ background: idea.color }}><UserRound size={19} /></span><div><strong>{idea.name}</strong><small>@{idea.handle}</small></div><span className="idea-category">{idea.category}</span></div><h3>{idea.title}</h3><p>{idea.text}</p><button className="text-button" tabIndex={-1} onClick={(event) => { event.stopPropagation(); onAsset(liveOf(getAssetOrFallback(idea.asset))); }}>Explorar {idea.asset}<ArrowRight size={15} /></button></article>)}</div><div className="dialog-footnote"><Info size={15} />Perfiles e ideas generados para ilustrar la experiencia de comunidad. No es asesoramiento financiero.</div>
     </Modal>
   );
 }
