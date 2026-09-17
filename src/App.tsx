@@ -6,8 +6,10 @@ import MarketLogo, { BrandMark } from './components/MarketLogo';
 import MarketChart, { Sparkline, type Period } from './components/MarketChart';
 import AssetQuote from './components/AssetQuote';
 import { AlertsDialog, ArticleDialog, AssetDialog, CalendarDialog, CommunityDialog, HelpDialog, NewsDialog, ProfileDialog, SearchDialog, WatchlistDialog, articleFromFeed, type PriceAlert, type Profile } from './components/MarketDialogs';
+import { SpaceDialog } from './components/AccountDialogs';
 import useStoredState from './utils/useStoredState';
 import { LiveProvider, useLive } from './data/live';
+import { AuthProvider, useAuth } from './data/auth';
 import { getAssetOrFallback, useCustom } from './data/custom';
 
 type DialogView =
@@ -16,6 +18,7 @@ type DialogView =
   | { type: 'alerts'; assetId?: string }
   | { type: 'calendar' }
   | { type: 'profile' }
+  | { type: 'account' }
   | { type: 'watchlist' }
   | { type: 'article'; articleId: number | string }
   | { type: 'news' }
@@ -61,6 +64,7 @@ function App() {
   const { liveOf, connected, refreshing, liveCount, symbolCount, refresh, feed } = useLive();
 
   const { assets: customAssets } = useCustom();
+  const { user } = useAuth();
   const selectedAsset = getAssetOrFallback(selectedId);
   const validWatchlist = useMemo(() => Array.isArray(watchlist) ? watchlist.filter((id) => ASSETS.some((asset) => asset.id === id) || customAssets.some((asset) => asset.id === id)) : DEFAULT_WATCHLIST, [watchlist, customAssets]);
   const notify = useCallback((message: string) => setToast({ message, id: Date.now() }), []);
@@ -118,6 +122,7 @@ function App() {
       case 'alerts': return <AlertsDialog key="alerts" onClose={closeDialog} alerts={alerts} initialAssetId={view.assetId} onAdd={(alert) => { setAlerts((current) => [...current, alert]); notify('Alerta guardada en este dispositivo'); }} onRemove={(id) => { setAlerts((current) => current.filter((alert) => alert.id !== id)); notify('Alerta eliminada'); }} />;
       case 'calendar': return <CalendarDialog key="calendar" onClose={closeDialog} />;
       case 'profile': return <ProfileDialog key="profile" onClose={closeDialog} profile={profile} onSave={(next) => { setProfile(next); selectCategory(next.category); setView(null); notify(`Tu espacio est\u00e1 listo, ${next.name}`); }} onSignOut={() => { setProfile(null); setView(null); notify('Perfil local eliminado. Tus favoritos se conservan.'); }} />;
+      case 'account': return <SpaceDialog key="account" onClose={closeDialog} onAsset={openAsset} onArticle={openArticle} />;
       case 'watchlist': return <WatchlistDialog key="watchlist" onClose={closeDialog} ids={validWatchlist} name={watchlistName} onRename={(name) => { setWatchlistName(name); notify('Nombre de la lista actualizado'); }} onChange={setWatchlist} onAdd={() => setView({ type: 'search', adding: true })} onSelect={openAsset} />;
       case 'article': { const article = typeof view.articleId === 'string' ? (() => { const item = feed.find((entry) => entry.id === view.articleId); return item ? articleFromFeed(item) : ARTICLES[0]; })() : (ARTICLES.find((item) => item.id === view.articleId) ?? ARTICLES[0]); return <ArticleDialog key={`article-${article.id}`} article={article} onClose={closeDialog} onAsset={openAsset} saved={typeof article.id === 'number' && savedArticles.includes(article.id)} onSave={() => { if (typeof article.id !== 'number') return; const saved = savedArticles.includes(article.id); setSavedArticles(saved ? savedArticles.filter((id) => id !== article.id) : [...savedArticles, article.id]); notify(saved ? 'Noticia eliminada de guardadas' : 'Noticia guardada para leer m\u00e1s tarde'); }} />; }
       case 'news': return <NewsDialog key="news" onClose={closeDialog} onArticle={openArticle} feed={feed} />;
@@ -147,7 +152,7 @@ function App() {
             <button className={`live-badge-button ${connected ? 'connected' : 'disconnected'}`} onClick={() => refresh()} disabled={refreshing} title={connected ? `En vivo \u00b7 ${liveCount}/${symbolCount} activos` : 'Actualizaci\u00f3n constante de la sesi\u00f3n'} aria-label={connected ? 'Mercados en vivo. Pulsa para actualizar' : 'El feed avanza en tiempo real'}><span className="status-dot" />{connected ? 'En vivo' : 'En marcha'}{refreshing && <RefreshCw size={11} className="spin-icon" />}</button>
             <button className="global-search" onClick={() => setView({ type: 'search' })}><Search size={17} /><span>Buscar</span><kbd><span className="command-symbol">&#8984;</span> K</kbd></button>
             <button className="locale-button" title={'Espa\u00f1ol - vista global'} onClick={() => { setCategory('overview'); changeRegion('global'); window.scrollTo({ top: 0, behavior: 'smooth' }); }} aria-label={'Ver mercados globales en espa\u00f1ol'}><Globe2 size={18} /><span>ES</span></button>
-            <button className="start-button" onClick={() => setView({ type: 'profile' })}>{profile ? <><span className="profile-initial">{profile.name.slice(0, 1).toUpperCase()}</span><span>{profile.name}</span></> : <><span className="desktop-start">Empezar gratis</span><span className="mobile-start">Empezar</span></>}<ArrowUpRight size={15} /></button>
+            <button className="start-button" onClick={() => setView({ type: 'account' })}>{user ? <><span className="profile-initial">{(user.email ?? 'T').slice(0, 1).toUpperCase()}</span><span>{profile?.name ?? (user.email ?? 'Mi cuenta')}</span></> : <><span className="desktop-start">Crear cuenta</span><span className="mobile-start">Cuenta</span></>}<ArrowUpRight size={15} /></button>
             <div className="mobile-menu-root" data-menu-root><button className="icon-button mobile-menu-button" aria-label={'Abrir navegaci\u00f3n'} onClick={() => setMenu(menu === 'mobile' ? null : 'mobile')}><Menu size={22} /></button>{menu === 'mobile' && <div className="dropdown-menu mobile-dropdown"><button onClick={() => { selectCategory('overview'); window.scrollTo({ top: 0, behavior: 'smooth' }); }}>Mercados</button><button onClick={goToNews}>Noticias</button><button onClick={() => { setMenu(null); setView({ type: 'community' }); }}>Comunidad</button><button onClick={() => { setMenu(null); setView({ type: 'calendar' }); }}>Calendario</button><button onClick={() => { setMenu(null); setView({ type: 'watchlist' }); }}>Mi lista</button></div>}</div>
           </div>
         </header>
@@ -199,5 +204,5 @@ function App() {
 }
 
 export default function AppWrapper() {
-  return <LiveProvider><App /></LiveProvider>;
+  return <AuthProvider><LiveProvider><App /></LiveProvider></AuthProvider>;
 }
