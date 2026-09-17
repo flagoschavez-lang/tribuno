@@ -35,8 +35,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<AccountProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const loadProfile = useCallback(async (userId: string) => {
-    const next = await fetchProfile(userId);
+  const loadProfile = useCallback(async (userId: string, email?: string) => {
+    let next = await fetchProfile(userId);
+    if (!next) {
+      await upsertProfile(userId, email?.split('@')[0] || 'Miembro');
+      next = await fetchProfile(userId);
+    }
     setProfile(next);
   }, []);
 
@@ -45,12 +49,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     supabase.auth.getSession().then(({ data }) => {
       if (!active) return;
       setSession(data.session);
-      if (data.session?.user) void loadProfile(data.session.user.id);
+      if (data.session?.user) void loadProfile(data.session.user.id, data.session.user.email ?? undefined);
       setLoading(false);
     });
     const { data: listener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
       setSession(nextSession);
-      if (nextSession?.user) void loadProfile(nextSession.user.id);
+      if (nextSession?.user) void loadProfile(nextSession.user.id, nextSession.user.email ?? undefined);
       else setProfile(null);
     });
     return () => { active = false; listener.subscription.unsubscribe(); };
