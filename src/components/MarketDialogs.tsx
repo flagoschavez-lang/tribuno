@@ -8,6 +8,7 @@ import AssetQuote from './AssetQuote';
 import { useLive, attachCustomSymbol, type FeedItem } from '../data/live';
 import { useSeries } from '../data/series';
 import { getAssetOrFallback, registerCustom, searchAllMarkets, type ResolvedSymbol } from '../data/custom';
+import { useI18n } from '../i18n';
 
 function hashText(value: string): number {
   let hash = 0;
@@ -15,10 +16,21 @@ function hashText(value: string): number {
   return Math.abs(hash);
 }
 
-export function articleFromFeed(item: FeedItem): Article {
+export function articleFromFeed(item: FeedItem, lang: 'es' | 'en' = 'es'): Article {
   const asset = getAssetOrFallback(item.assetId);
   const source = ARTICLES[hashText(item.id) % ARTICLES.length];
   const priceText = formatPrice(asset.price, asset.decimals);
+  const body = lang === 'en'
+    ? [
+        `${asset.name} (${asset.symbol}) trades at ${priceText} ${asset.currency}, with a ${formatChange(asset.change)} move during the session. Trading activity keeps participants on watch amid sustained momentum.`,
+        `Volume sits at ${formatCompact(asset.volume || 0)} and the intraday reference updates continuously. The ${priceText} ${asset.currency} level works as an immediate reference for the asset.`,
+        'From an analysis perspective, a move like this is best understood against volume and the breadth of the rest of the market. Time horizon and risk tolerance remain the most relevant variables when interpreting any headline.',
+      ]
+    : [
+        `${asset.name} (${asset.symbol}) cotiza en ${priceText} ${asset.currency}, con un movimiento del ${formatChange(asset.change)} durante la sesi\u00f3n. La operativa mantiene la atenci\u00f3n de los participantes en un contexto de actividad sostenida.`,
+        `El volumen negociado se sit\u00faa en ${formatCompact(asset.volume || 0)} y la referencia intrad\u00eda se actualiza de forma continua. El nivel de ${priceText} ${asset.currency} funciona como referencia inmediata para el activo.`,
+        'Desde una perspectiva de an\u00e1lisis, un movimiento de este tipo conviene contextualizarlo con el volumen y la amplitud del resto del mercado. El horizonte temporal y la tolerancia al riesgo siguen siendo las variables m\u00e1s relevantes a la hora de interpretar cualquier titular.',
+      ];
   return {
     id: item.id,
     category: item.category,
@@ -31,11 +43,7 @@ export function articleFromFeed(item: FeedItem): Article {
     assetId: item.assetId,
     source: item.source,
     url: item.url,
-    body: [
-      `${asset.name} (${asset.symbol}) cotiza en ${priceText} ${asset.currency}, con un movimiento del ${formatChange(asset.change)} durante la sesi\u00f3n. La operativa mantiene la atenci\u00f3n de los participantes en un contexto de actividad sostenida.`,
-      `El volumen negociado se sit\u00faa en ${formatCompact(asset.volume || 0)} y la referencia intrad\u00eda se actualiza de forma continua. El nivel de ${priceText} ${asset.currency} funciona como referencia inmediata para el activo.`,
-      'Desde una perspectiva de an\u00e1lisis, un movimiento de este tipo conviene contextualizarlo con el volumen y la amplitud del resto del mercado. El horizonte temporal y la tolerancia al riesgo siguen siendo las variables m\u00e1s relevantes a la hora de interpretar cualquier titular.',
-    ],
+    body,
   };
 }
 
@@ -64,8 +72,9 @@ export function SearchDialog({ onClose, onSelect, onToggleWatch, watchlist, addi
   const [remote, setRemote] = useState<ResolvedSymbol[] | null>(null);
   const [searching, setSearching] = useState(false);
   const { liveOf } = useLive();
+  const { t, catLabel } = useI18n();
   const results = useMemo(() => ASSETS.filter((asset) => (filter === 'all' || asset.category === filter) && normalize(`${asset.symbol} ${asset.name}`).includes(normalize(query))), [query, filter]);
-  const tabs = [{ id: 'all', label: 'Todos' }, ...CATEGORIES.filter((category) => ['stocks', 'crypto', 'indices', 'forex'].includes(category.id))];
+  const tabs = [{ id: 'all', label: t('search.all') }, ...CATEGORIES.filter((category) => ['stocks', 'crypto', 'indices', 'forex'].includes(category.id))];
   const runRemoteSearch = async () => {
     const value = query.trim();
     if (value.length < 2) return;
@@ -94,12 +103,12 @@ export function SearchDialog({ onClose, onSelect, onToggleWatch, watchlist, addi
     }
   };
   return (
-    <Modal title={adding ? 'A\u00f1adir s\u00edmbolo' : 'Encuentra tu pr\u00f3xima oportunidad'} onClose={onClose} className="search-modal">
-      <div className="search-input-wrap"><Search size={21} /><input autoFocus value={query} onChange={(event) => { setQuery(event.target.value); setActiveIndex(0); setRemote(null); }} onKeyDown={handleSearchKey} placeholder={'Buscar por nombre o s\u00edmbolo en todos los mercados'} aria-label={'Buscar por nombre o s\u00edmbolo. Usa las flechas y pulsa Intro para seleccionar.'} /><kbd>ESC</kbd></div>
-      <div className="dialog-filter-tabs">{tabs.map((tab) => <button key={tab.id} className={filter === tab.id ? 'active' : ''} onClick={() => { setFilter(tab.id); setActiveIndex(0); }}>{tab.label}</button>)}</div>
-      <div className="search-results-label">{query ? `${results.length} resultados locales` : 'EXPLORA LOS MERCADOS'}<span>{remote ? `\u00b7 ${remote.length} en todo el mundo` : 'Precio &middot; Cambio'}</span></div>
+    <Modal title={adding ? t('search.addTitle') : t('search.title')} onClose={onClose} className="search-modal">
+      <div className="search-input-wrap"><Search size={21} /><input autoFocus value={query} onChange={(event) => { setQuery(event.target.value); setActiveIndex(0); setRemote(null); }} onKeyDown={handleSearchKey} placeholder={t('search.placeholder')} aria-label={t('search.placeholder')} /><kbd>ESC</kbd></div>
+      <div className="dialog-filter-tabs">{tabs.map((tab) => <button key={tab.id} className={filter === tab.id ? 'active' : ''} onClick={() => { setFilter(tab.id); setActiveIndex(0); }}>{tab.id === 'all' ? tab.label : catLabel(tab.id as Category)}</button>)}</div>
+      <div className="search-results-label">{query ? t('search.localResults', { n: results.length }) : t('search.exploreMarkets')}<span>{remote ? t('search.worldwide', { n: remote.length }) : t('search.priceChange')}</span></div>
       {!results.length && !remote && query.trim().length >= 2 && (
-        <div className="remote-search-cta"><Globe2 size={22} /><div><strong>Explorar todos los mercados</strong><span>Buscamos {query.trim()} en bolsas de todo el mundo, incluidas las que no est\u00e1n en nuestra lista inicial.</span></div><button className="secondary-button" onClick={runRemoteSearch} disabled={searching}>{searching ? 'Buscando\u2026' : 'Buscar en todo el mundo'} <ArrowRight size={15} /></button></div>
+        <div className="remote-search-cta"><Globe2 size={22} /><div><strong>{t('search.globalTitle')}</strong><span>{t('search.globalDesc', { query: query.trim() })}</span></div><button className="secondary-button" onClick={runRemoteSearch} disabled={searching}>{searching ? t('search.searching') : t('search.searchWorld')} <ArrowRight size={15} /></button></div>
       )}
       <div className="search-results">
         {results.length ? results.map((asset, index) => { const live = liveOf(asset); return (
@@ -109,12 +118,12 @@ export function SearchDialog({ onClose, onSelect, onToggleWatch, watchlist, addi
               <span className="search-asset-name"><strong>{live.symbol}</strong><span>{live.name}</span></span>
               <span className="search-asset-value"><strong>{formatPrice(live.price, live.decimals)} <small>{live.currency}</small></strong><span className={live.change >= 0 ? 'positive' : 'negative'}>{formatChange(live.change)}</span></span>
             </button>
-            <button className={`icon-button ${watchlist.includes(asset.id) ? 'is-watched' : ''}`} aria-label={`${watchlist.includes(asset.id) ? 'Quitar' : 'A\u00f1adir'} ${asset.name} ${watchlist.includes(asset.id) ? 'de' : 'a'} mi lista`} onClick={() => onToggleWatch(asset.id)}>{watchlist.includes(asset.id) ? <Check size={19} /> : <Plus size={19} />}</button>
+            <button className={`icon-button ${watchlist.includes(asset.id) ? 'is-watched' : ''}`} aria-label={t(watchlist.includes(asset.id) ? 'aria.favRemove' : 'aria.favAdd', { symbol: asset.name })} onClick={() => onToggleWatch(asset.id)}>{watchlist.includes(asset.id) ? <Check size={19} /> : <Plus size={19} />}</button>
           </div>
-        ); }) : remote ? remote.map((match) => <div className="search-result" key={match.symbol}><button className="search-result-main" onClick={() => pickRemote(match)}><span className="remote-symbol">{match.symbol.slice(0, 2).toUpperCase()}</span><span className="search-asset-name"><strong>{match.symbol}</strong><span>{match.name} \u00b7 {match.exchange}</span></span>{match.price ? <span className="search-asset-value"><strong>{formatPrice(match.price)} <small>{match.currency ?? ''}</small></strong></span> : <ChevronRight size={17} className="remote-chevron" />}</button>{adding && <button className="icon-button" aria-label={`A\u00f1adir ${match.symbol} a mi lista`} onClick={() => pickRemote(match)}><Plus size={19} /></button>}</div>) : !results.length ? <div className="empty-state"><Search size={32} /><h3>No encontramos ese activo en la lista</h3><p>Usa la b&uacute;squeda global para encontrarlo en cualquier mercado del mundo.</p><button className="text-button" onClick={runRemoteSearch} disabled={searching}>{searching ? 'Buscando\u2026' : 'Buscar en todos los mercados'}</button></div> : null}
+        ); }) : remote ? remote.map((match) => <div className="search-result" key={match.symbol}><button className="search-result-main" onClick={() => pickRemote(match)}><span className="remote-symbol">{match.symbol.slice(0, 2).toUpperCase()}</span><span className="search-asset-name"><strong>{match.symbol}</strong><span>{match.name} \u00b7 {match.exchange}</span></span>{match.price ? <span className="search-asset-value"><strong>{formatPrice(match.price)} <small>{match.currency ?? ''}</small></strong></span> : <ChevronRight size={17} className="remote-chevron" />}</button>{adding && <button className="icon-button" aria-label={t('aria.favAdd', { symbol: match.symbol })} onClick={() => pickRemote(match)}><Plus size={19} /></button>}</div>) : !results.length ? <div className="empty-state"><Search size={32} /><h3>{t('search.noLocal')}</h3><p>{t('search.noLocalDesc')}</p><button className="text-button" onClick={runRemoteSearch} disabled={searching}>{searching ? t('search.searching') : t('search.searchMarkets')}</button></div> : null}
       </div>
-      {(remote && !remote.length && query.trim().length >= 2) && <div className="empty-state"><Search size={32} /><h3>Sin coincidencias globales</h3><p>Prueba con otro nombre o s&iacute;mbolo de mercado.</p></div>}
-      <div className="dialog-footnote"><Info size={14} />Cobertura global de mercados. Las cotizaciones llegan en vivo cuando el activo est&aacute; en sesi&oacute;n; el resto conserva una referencia de mercado.</div>
+      {(remote && !remote.length && query.trim().length >= 2) && <div className="empty-state"><Search size={32} /><h3>{t('search.noGlobal')}</h3><p>{t('search.noGlobalDesc')}</p></div>}
+      <div className="dialog-footnote"><Info size={14} />{t('search.footnote')}</div>
     </Modal>
   );
 }
@@ -122,20 +131,21 @@ export function SearchDialog({ onClose, onSelect, onToggleWatch, watchlist, addi
 export function AssetDialog({ asset, expanded, onClose, onToggleWatch, watched, onCreateAlert }: BaseProps & { asset: Asset; expanded?: boolean; onToggleWatch: () => void; watched: boolean; onCreateAlert: () => void }) {
   const [period, setPeriod] = useState<Period>('1D');
   const { liveOf, connected, refresh, refreshing } = useLive();
+  const { t } = useI18n();
   const live = liveOf(asset);
   const { points } = useSeries(live, period);
   return (
-    <Modal title={expanded ? 'Tu perspectiva del mercado' : live.name} onClose={onClose} className={`asset-modal ${expanded ? 'wide-modal' : ''}`}>
-      <div className="detail-quote"><AssetQuote asset={live} /><span className={`demo-label ${connected ? 'live-active' : ''}`}><span />{connected ? 'Cotizaci\u00f3n en vivo' : 'Referencia de mercado'}<button className="demo-refresh" onClick={() => refresh()} aria-label="Actualizar cotizaciones" title="Actualizar cotizaciones"><RefreshCw size={12} className={refreshing ? 'spin-icon' : ''} /></button></span></div>
+    <Modal title={expanded ? t('asset.expandedTitle') : live.name} onClose={onClose} className={`asset-modal ${expanded ? 'wide-modal' : ''}`}>
+      <div className="detail-quote"><AssetQuote asset={live} /><span className={`demo-label ${connected ? 'live-active' : ''}`}><span />{connected ? t('asset.liveQuote') : t('asset.reference')}<button className="demo-refresh" onClick={() => refresh()} aria-label={t('asset.update')} title={t('asset.update')}><RefreshCw size={12} className={refreshing ? 'spin-icon' : ''} /></button></span></div>
       <MarketChart asset={live} period={period} onPeriodChange={setPeriod} expanded />
       <div className="asset-detail-stats">
-        <div><span>Apertura</span><strong>{formatPrice(points[0]?.open ?? live.price, live.decimals)}</strong></div>
-        <div><span>M&aacute;ximo del periodo</span><strong>{formatPrice(points.length ? Math.max(...points.map((point) => point.high)) : live.price, live.decimals)}</strong></div>
-        <div><span>M&iacute;nimo del periodo</span><strong>{formatPrice(points.length ? Math.min(...points.map((point) => point.low)) : live.price, live.decimals)}</strong></div>
-        <div><span>Volumen</span><strong>{formatCompact(live.volume)}</strong></div>
+        <div><span>{t('asset.open')}</span><strong>{formatPrice(points[0]?.open ?? live.price, live.decimals)}</strong></div>
+        <div><span>{t('asset.high')}</span><strong>{formatPrice(points.length ? Math.max(...points.map((point) => point.high)) : live.price, live.decimals)}</strong></div>
+        <div><span>{t('asset.low')}</span><strong>{formatPrice(points.length ? Math.min(...points.map((point) => point.low)) : live.price, live.decimals)}</strong></div>
+        <div><span>{t('asset.volume')}</span><strong>{formatCompact(live.volume)}</strong></div>
       </div>
       <p className="asset-description">{live.description}</p>
-      <div className="detail-actions"><button className={watched ? 'secondary-button' : 'primary-button'} onClick={onToggleWatch}>{watched ? <Check size={17} /> : <Plus size={17} />}{watched ? 'En mi lista de seguimiento' : 'A\u00f1adir a mi lista'}</button><button className="secondary-button" onClick={onCreateAlert}><Bell size={16} />Crear alerta</button></div>
+      <div className="detail-actions"><button className={watched ? 'secondary-button' : 'primary-button'} onClick={onToggleWatch}>{watched ? <Check size={17} /> : <Plus size={17} />}{watched ? t('asset.inList') : t('asset.addList')}</button><button className="secondary-button" onClick={onCreateAlert}><Bell size={16} />{t('asset.createAlert')}</button></div>
     </Modal>
   );
 }
@@ -147,27 +157,28 @@ export function AlertsDialog({ onClose, alerts, onAdd, onRemove, initialAssetId 
   const [price, setPrice] = useState((seedAsset.price * 1.05).toFixed(seedAsset.decimals));
   const [error, setError] = useState('');
   const { liveOf, connected } = useLive();
+  const { t } = useI18n();
   const selected = liveOf(getAssetOrFallback(assetId));
   const submit = (event: FormEvent) => {
     event.preventDefault();
     const target = Number(price);
-    if (!Number.isFinite(target) || target <= 0) { setError('Introduce un precio v\u00e1lido mayor que cero.'); return; }
+    if (!Number.isFinite(target) || target <= 0) { setError(t('alerts.invalid')); return; }
     onAdd({ id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, assetId, condition, price: target });
     setError('');
   };
   return (
-    <Modal title="Tus alertas de precio" onClose={onClose} className="alerts-modal">
-      <p className="modal-intro">Tus niveles importantes, siempre a mano.</p>
-      <div className="alerts-current"><MarketLogo asset={selected} size={34} /><div><strong>{selected.shortName}</strong><span>Precio actual: {formatPrice(selected.price, selected.decimals)} {selected.currency} <em className={selected.change >= 0 ? 'positive' : 'negative'}>({formatChange(selected.change)})</em> {connected && <em className="alerts-live-tag"> en vivo</em>}</span></div></div>
+    <Modal title={t('alerts.title')} onClose={onClose} className="alerts-modal">
+      <p className="modal-intro">{t('alerts.intro')}</p>
+      <div className="alerts-current"><MarketLogo asset={selected} size={34} /><div><strong>{selected.shortName}</strong><span>{t('alerts.current')} {formatPrice(selected.price, selected.decimals)} {selected.currency} <em className={selected.change >= 0 ? 'positive' : 'negative'}>({formatChange(selected.change)})</em> {connected && <em className="alerts-live-tag"> {t('quote.live')}</em>}</span></div></div>
       <form onSubmit={submit} className="alert-form">
-        <label>Activo<select value={assetId} onChange={(event) => { setAssetId(event.target.value); const next = getAssetOrFallback(event.target.value); setPrice((next.price * 1.05).toFixed(next.decimals)); }}>{ASSETS.map((asset) => <option value={asset.id} key={asset.id}>{asset.symbol} - {asset.shortName}</option>)}</select></label>
-        <div className="form-two-columns"><label>Condici&oacute;n<select value={condition} onChange={(event) => setCondition(event.target.value as 'above' | 'below')}><option value="above">Precio por encima de</option><option value="below">Precio por debajo de</option></select></label><label>Precio objetivo ({selected.currency})<input type="number" step="any" min="0.000001" value={price} required onChange={(event) => setPrice(event.target.value)} /></label></div>
+        <label>{t('alerts.asset')}<select value={assetId} onChange={(event) => { setAssetId(event.target.value); const next = getAssetOrFallback(event.target.value); setPrice((next.price * 1.05).toFixed(next.decimals)); }}>{ASSETS.map((asset) => <option value={asset.id} key={asset.id}>{asset.symbol} - {asset.shortName}</option>)}</select></label>
+        <div className="form-two-columns"><label>{t('alerts.condition')}<select value={condition} onChange={(event) => setCondition(event.target.value as 'above' | 'below')}><option value="above">{t('alerts.above')}</option><option value="below">{t('alerts.below')}</option></select></label><label>{t('alerts.target', { currency: selected.currency })}<input type="number" step="any" min="0.000001" value={price} required onChange={(event) => setPrice(event.target.value)} /></label></div>
         {error && <p className="form-error" role="alert">{error}</p>}
-        <button className="primary-button" type="submit"><Bell size={17} />Guardar alerta</button>
+        <button className="primary-button" type="submit"><Bell size={17} />{t('alerts.save')}</button>
       </form>
-      <h3 className="dialog-section-title">Alertas guardadas <span>{alerts.length}</span></h3>
-      <div className="saved-alerts">{alerts.length ? alerts.map((alert) => { const asset = liveOf(getAssetOrFallback(alert.assetId)); return <div className="saved-alert" key={alert.id}><MarketLogo asset={asset} size={32} /><div><strong>{asset.shortName}</strong><span>{alert.condition === 'above' ? 'Por encima de' : 'Por debajo de'} {formatPrice(alert.price, asset.decimals)} {asset.currency}</span></div><button className="icon-button" aria-label={`Eliminar alerta de ${asset.shortName}`} onClick={() => onRemove(alert.id)}><Trash2 size={16} /></button></div>; }) : <div className="small-empty-state"><Bell size={24} /><p>A&uacute;n no tienes alertas. Guarda tu primer nivel de precio.</p></div>}</div>
-      <div className="dialog-notice"><Info size={17} /><p>Las alertas se guardan en este dispositivo y se supervisan mientras exploras. La plataforma no env&iacute;a notificaciones externas.</p></div>
+      <h3 className="dialog-section-title">{t('alerts.saved')} <span>{alerts.length}</span></h3>
+      <div className="saved-alerts">{alerts.length ? alerts.map((alert) => { const asset = liveOf(getAssetOrFallback(alert.assetId)); return <div className="saved-alert" key={alert.id}><MarketLogo asset={asset} size={32} /><div><strong>{asset.shortName}</strong><span>{alert.condition === 'above' ? t('alerts.aboveShort') : t('alerts.belowShort')} {formatPrice(alert.price, asset.decimals)} {asset.currency}</span></div><button className="icon-button" aria-label={`${t('aria.favRemove')}`} onClick={() => onRemove(alert.id)}><Trash2 size={16} /></button></div>; }) : <div className="small-empty-state"><Bell size={24} /><p>{t('alerts.empty')}</p></div>}</div>
+      <div className="dialog-notice"><Info size={17} /><p>{t('alerts.notice')}</p></div>
     </Modal>
   );
 }
@@ -175,12 +186,14 @@ export function AlertsDialog({ onClose, alerts, onAdd, onRemove, initialAssetId 
 export function CalendarDialog({ onClose }: BaseProps) {
   const [day, setDay] = useState(0);
   const events = ECONOMIC_EVENTS.filter((event) => day === 2 || event.day === day);
+  const { t } = useI18n();
+  const dayLabels = [t('calendar.today'), t('calendar.tomorrow'), t('calendar.week')];
   return (
-    <Modal title={'Calendario econ\u00f3mico'} onClose={onClose} className="calendar-modal">
-      <p className="modal-intro">Los acontecimientos que pueden mover los mercados.</p>
-      <div className="calendar-toolbar"><div className="dialog-filter-tabs">{['Hoy', 'Ma\u00f1ana', 'Esta semana'].map((label, index) => <button key={label} className={day === index ? 'active' : ''} onClick={() => setDay(index)}>{label}</button>)}</div><span><Clock3 size={14} />UTC+2</span></div>
-      <div className="calendar-table-wrap"><table className="calendar-table"><thead><tr><th>Hora</th><th>Evento</th><th>Impacto</th><th>Previsi&oacute;n</th><th>Anterior</th></tr></thead><tbody>{events.map((event) => <tr key={event.id}><td>{day === 2 && <small>{event.day === 0 ? 'Hoy' : event.day === 1 ? 'Ma\u00f1ana' : 'En 2 d\u00edas'}</small>}{event.time}</td><td><img src={`https://flagcdn.com/${event.country === 'EU' ? 'eu' : event.country.toLowerCase()}.svg`} alt={event.country} width="22" height="22" /><span>{event.name}</span></td><td><span className="impact-dots" aria-label={`Impacto ${event.impact === 3 ? 'alto' : 'medio'}`}>{[1, 2, 3].map((dot) => <i key={dot} className={dot <= event.impact ? 'filled' : ''} />)}</span></td><td>{event.forecast}</td><td>{event.previous}</td></tr>)}</tbody></table></div>
-      <div className="dialog-footnote"><Info size={14} />Agenda elaborada a partir de referencias macroecon&oacute;micas; las cifras pueden ser revisadas por las fuentes oficiales.</div>
+    <Modal title={t('calendar.title')} onClose={onClose} className="calendar-modal">
+      <p className="modal-intro">{t('calendar.intro')}</p>
+      <div className="calendar-toolbar"><div className="dialog-filter-tabs">{dayLabels.map((label, index) => <button key={label} className={day === index ? 'active' : ''} onClick={() => setDay(index)}>{label}</button>)}</div><span><Clock3 size={14} />UTC+2</span></div>
+      <div className="calendar-table-wrap"><table className="calendar-table"><thead><tr><th>{t('calendar.hour')}</th><th>{t('calendar.event')}</th><th>{t('calendar.impact')}</th><th>{t('calendar.forecast')}</th><th>{t('calendar.previous')}</th></tr></thead><tbody>{events.map((event) => <tr key={event.id}><td>{day === 2 && <small>{event.day === 0 ? t('calendar.today') : event.day === 1 ? t('calendar.tomorrow') : t('calendar.in2days')}</small>}{event.time}</td><td><img src={`https://flagcdn.com/${event.country === 'EU' ? 'eu' : event.country.toLowerCase()}.svg`} alt={event.country} width="22" height="22" /><span>{event.name}</span></td><td><span className="impact-dots" aria-label={`${t('calendar.impact')} ${event.impact === 3 ? t('calendar.high') : t('calendar.medium')}`}>{[1, 2, 3].map((dot) => <i key={dot} className={dot <= event.impact ? 'filled' : ''} />)}</span></td><td>{event.forecast}</td><td>{event.previous}</td></tr>)}</tbody></table></div>
+      <div className="dialog-footnote"><Info size={14} />{t('calendar.footnote')}</div>
     </Modal>
   );
 }
@@ -189,14 +202,15 @@ export function ProfileDialog({ onClose, profile, onSave, onSignOut }: BaseProps
   const [name, setName] = useState(profile?.name ?? '');
   const [category, setCategory] = useState<Category>(profile?.category ?? 'overview');
   const [error, setError] = useState('');
-  const submit = (event: FormEvent) => { event.preventDefault(); if (name.trim().length < 2) { setError('Escribe un nombre de al menos 2 caracteres.'); return; } onSave({ name: name.trim(), category }); };
+  const { t, catLabel } = useI18n();
+  const submit = (event: FormEvent) => { event.preventDefault(); if (name.trim().length < 2) { setError(t('profile.nameError')); return; } onSave({ name: name.trim(), category }); };
   return (
-    <Modal title={profile ? 'Tu espacio Tribuno' : 'El mercado es solo el comienzo.'} onClose={onClose} className="profile-modal">
+    <Modal title={profile ? t('profile.title') : t('profile.titleNew')} onClose={onClose} className="profile-modal">
       <div className="profile-brand"><BrandMark /><span>tribuno</span></div>
-      <p className="modal-intro">Una perspectiva global. Un espacio a tu medida. Personaliza tu experiencia y sigue lo que te importa.</p>
-      <form onSubmit={submit} className="profile-form"><label>&iquest;C&oacute;mo te llamas?<input value={name} onChange={(event) => setName(event.target.value)} placeholder="Tu nombre" autoComplete="given-name" maxLength={30} required /></label><label>Tu mercado favorito<select value={category} onChange={(event) => setCategory(event.target.value as Category)}>{CATEGORIES.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select></label>{error && <p className="form-error">{error}</p>}<button type="submit" className="primary-button">{profile ? 'Guardar preferencias' : 'Crear mi espacio gratis'}<ArrowRight size={17} /></button></form>
-      <div className="privacy-note"><LockKeyhole size={15} /><span>Sin contrase&ntilde;as. Sin registros externos. Tu perfil y favoritos se guardan &uacute;nicamente en este navegador.</span></div>
-      {profile && <button className="text-button sign-out" onClick={onSignOut}>Eliminar mi perfil local</button>}
+      <p className="modal-intro">{t('profile.intro')}</p>
+      <form onSubmit={submit} className="profile-form"><label>{t('profile.name')}<input value={name} onChange={(event) => setName(event.target.value)} placeholder={t('profile.namePlaceholder')} autoComplete="given-name" maxLength={30} required /></label><label>{t('profile.favorite')}<select value={category} onChange={(event) => setCategory(event.target.value as Category)}>{CATEGORIES.map((item) => <option key={item.id} value={item.id}>{catLabel(item.id)}</option>)}</select></label>{error && <p className="form-error">{error}</p>}<button type="submit" className="primary-button">{profile ? t('profile.save') : t('profile.create')}<ArrowRight size={17} /></button></form>
+      <div className="privacy-note"><LockKeyhole size={15} /><span>{t('profile.privacy')}</span></div>
+      {profile && <button className="text-button sign-out" onClick={onSignOut}>{t('profile.signOut')}</button>}
     </Modal>
   );
 }
@@ -205,77 +219,107 @@ export function WatchlistDialog({ onClose, ids, name, onRename, onChange, onAdd,
   const [draftName, setDraftName] = useState(name);
   const [exported, setExported] = useState(false);
   const { liveOf } = useLive();
+  const { t } = useI18n();
   const move = (index: number, direction: number) => { const next = [...ids]; [next[index], next[index + direction]] = [next[index + direction], next[index]]; onChange(next); }; 
-  const exportList = () => { const csv = ['Simbolo;Nombre;Precio;Moneda;Cambio (%)', ...ids.map((id) => { const asset = liveOf(getAssetOrFallback(id)); return `${asset.symbol};${asset.name};${formatPrice(asset.price, asset.decimals)};${asset.currency};${formatPrice(asset.change)}`; })].join('\n'); const url = URL.createObjectURL(new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' })); const link = document.createElement('a'); link.href = url; link.download = 'tribuno-mi-lista.csv'; link.click(); window.setTimeout(() => URL.revokeObjectURL(url), 1000); setExported(true); };
+  const exportList = () => { const csv = ['Simbolo;Nombre;Precio;Moneda;Cambio (%)', ...ids.map((id) => { const asset = liveOf(getAssetOrFallback(id)); return `${asset.symbol};${asset.name};${formatPrice(asset.price, asset.decimals)};${asset.currency};${formatPrice(asset.change)}`; })].join('\n'); const url = URL.createObjectURL(new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' })); const link = document.createElement('a'); link.href = url; link.download = lang === 'en' ? 'tribuno-my-list.csv' : 'tribuno-mi-lista.csv'; link.click(); window.setTimeout(() => URL.revokeObjectURL(url), 1000); setExported(true); };
+  const { lang } = useI18n();
   return (
-    <Modal title="Tu lista de seguimiento" onClose={onClose} className="watchlist-modal">
-      <form className="watchlist-name-form" onSubmit={(event) => { event.preventDefault(); if (draftName.trim()) onRename(draftName.trim()); }}><label>Nombre de la lista<input value={draftName} maxLength={32} required onChange={(event) => setDraftName(event.target.value)} /></label><button className="secondary-button" type="submit">Guardar</button></form>
-      <div className="watchlist-manage-items">{ids.length ? ids.map((id, index) => { const asset = liveOf(getAssetOrFallback(id)); return <div className="manage-watch-row" key={id}><button className="manage-watch-asset" onClick={() => onSelect(asset)}><MarketLogo asset={asset} size={32} /><span><strong>{asset.symbol}</strong><small>{asset.shortName}</small></span></button><span className={asset.change >= 0 ? 'positive' : 'negative'}>{formatChange(asset.change)}</span><div><button className="icon-button" disabled={index === 0} aria-label={`Subir ${asset.symbol}`} onClick={() => move(index, -1)}><ArrowUp size={16} /></button><button className="icon-button" disabled={index === ids.length - 1} aria-label={`Bajar ${asset.symbol}`} onClick={() => move(index, 1)}><ArrowDown size={16} /></button><button className="icon-button remove-button" aria-label={`Quitar ${asset.symbol}`} onClick={() => onChange(ids.filter((item) => item !== id))}><X size={17} /></button></div></div>; }) : <div className="empty-state"><Star size={30} /><h3>Tu lista, tus favoritos</h3><p>A&ntilde;ade s&iacute;mbolos para empezar a seguir el mercado.</p></div>}</div>
-      <div className="detail-actions"><button className="primary-button" onClick={onAdd}><Plus size={17} />A&ntilde;adir s&iacute;mbolo</button><button className="secondary-button" disabled={!ids.length} onClick={exportList}>{exported ? <CheckCheck size={16} /> : <ArrowDown size={16} />}{exported ? 'CSV descargado' : 'Exportar CSV'}</button></div>
-      <div className="dialog-footnote"><ShieldCheck size={15} />El orden y los s&iacute;mbolos se guardan autom&aacute;ticamente.</div>
+    <Modal title={t('watchModal.title')} onClose={onClose} className="watchlist-modal">
+      <form className="watchlist-name-form" onSubmit={(event) => { event.preventDefault(); if (draftName.trim()) onRename(draftName.trim()); }}><label>{t('watchModal.name')}<input value={draftName} maxLength={32} required onChange={(event) => setDraftName(event.target.value)} /></label><button className="secondary-button" type="submit">{t('watchModal.save')}</button></form>
+      <div className="watchlist-manage-items">{ids.length ? ids.map((id, index) => { const asset = liveOf(getAssetOrFallback(id)); return <div className="manage-watch-row" key={id}><button className="manage-watch-asset" onClick={() => onSelect(asset)}><MarketLogo asset={asset} size={32} /><span><strong>{asset.symbol}</strong><small>{asset.shortName}</small></span></button><span className={asset.change >= 0 ? 'positive' : 'negative'}>{formatChange(asset.change)}</span><div><button className="icon-button" disabled={index === 0} aria-label={`${t('watchModal.save')} ${asset.symbol}`} onClick={() => move(index, -1)}><ArrowUp size={16} /></button><button className="icon-button" disabled={index === ids.length - 1} aria-label={`${t('watchModal.save')} ${asset.symbol}`} onClick={() => move(index, 1)}><ArrowDown size={16} /></button><button className="icon-button remove-button" aria-label={t('aria.favRemove', { symbol: asset.symbol })} onClick={() => onChange(ids.filter((item) => item !== id))}><X size={17} /></button></div></div>; }) : <div className="empty-state"><Star size={30} /><h3>{t('watchModal.emptyTitle')}</h3><p>{t('watchModal.emptyDesc')}</p></div>}</div>
+      <div className="detail-actions"><button className="primary-button" onClick={onAdd}><Plus size={17} />{t('watchModal.add')}</button><button className="secondary-button" disabled={!ids.length} onClick={exportList}>{exported ? <CheckCheck size={16} /> : <ArrowDown size={16} />}{exported ? t('watchModal.exported') : t('watchModal.export')}</button></div>
+      <div className="dialog-footnote"><ShieldCheck size={15} />{t('watchModal.footnote')}</div>
     </Modal>
   );
 }
 
 export function ArticleDialog({ article, onClose, onAsset, saved, onSave }: BaseProps & { article: Article; onAsset: (asset: Asset) => void; saved: boolean; onSave: () => void }) {
   const asset = getAssetOrFallback(article.assetId);
+  const { t } = useI18n();
   return (
-    <Modal title="La perspectiva Tribuno" onClose={onClose} className="article-modal">
+    <Modal title={t('article.title')} onClose={onClose} className="article-modal">
       <img className="article-hero" src={article.image} alt={article.alt} />
-      <div className="article-meta"><span>{article.category}</span><span>{article.source ? `Fuente: ${article.source}` : 'Tribuno Editorial'}</span><span>{article.readTime} de lectura</span></div>
+      <div className="article-meta"><span>{article.category}</span><span>{article.source ? t('article.sourcePrefix', { source: article.source }) : t('article.editorial')}</span><span>{article.readTime}</span></div>
       <h1>{article.title}</h1><p className="article-summary">{article.summary}</p>
       <div className="article-body">{article.body.map((paragraph) => <p key={paragraph.slice(0, 30)}>{paragraph}</p>)}</div>
-      {article.url && <a className="article-source-link" href={article.url} target="_blank" rel="noopener noreferrer">Leer la informaci&oacute;n original{article.source ? ` en ${article.source}` : ''}<ArrowUpRight size={15} /></a>}
-      <div className="article-bottom"><button className="secondary-button" onClick={() => onAsset(asset)}><TrendingUp size={17} />Explorar {asset.shortName}<ArrowRight size={16} /></button><button className={`icon-button ${saved ? 'is-watched' : ''}`} onClick={onSave} aria-label={saved ? 'Quitar de noticias guardadas' : 'Guardar noticia'}><Bookmark size={20} fill={saved ? 'currentColor' : 'none'} /></button></div>
-      <div className="dialog-footnote"><Info size={15} />Titular y enlace citados a su fuente original; el an&aacute;lisis es propio y con fines informativos. No constituye asesoramiento de inversi&oacute;n.</div>
+      {article.url && <a className="article-source-link" href={article.url} target="_blank" rel="noopener noreferrer">{t('article.readOriginal')}{article.source ? t('article.inSource', { source: article.source }) : ''}<ArrowUpRight size={15} /></a>}
+      <div className="article-bottom"><button className="secondary-button" onClick={() => onAsset(asset)}><TrendingUp size={17} />{t('article.explore', { name: asset.shortName })}<ArrowRight size={16} /></button><button className={`icon-button ${saved ? 'is-watched' : ''}`} onClick={onSave} aria-label={saved ? t('article.unsave') : t('article.save')}><Bookmark size={20} fill={saved ? 'currentColor' : 'none'} /></button></div>
+      <div className="dialog-footnote"><Info size={15} />{t('article.footnote')}</div>
     </Modal>
   );
 }
 
 export function NewsDialog({ onClose, onArticle, feed }: BaseProps & { onArticle: (article: Article) => void; feed: FeedItem[] }) {
-  const [filter, setFilter] = useState('Últimas');
+  const [filter, setFilter] = useState('latest');
+  const { t, lang } = useI18n();
   const live = [...feed].sort((a, b) => b.createdAt - a.createdAt);
-  const news = filter === 'Editorial' ? [] : live.filter((item) => filter === 'Últimas' || item.category === filter);
+  const news = filter === 'editorial' ? [] : live.filter((item) => filter === 'latest' || item.category === filter);
+  const filters = [
+    { id: 'latest', label: t('newsModal.latest') },
+    { id: 'markets', label: t('newsModal.markets') },
+    { id: 'crypto', label: t('newsModal.crypto') },
+    { id: 'forex', label: t('newsModal.forex') },
+    { id: 'commodities', label: t('newsModal.commodities') },
+    { id: 'editorial', label: t('newsModal.editorial') },
+  ];
   return (
-    <Modal title="El mercado, en titulares" onClose={onClose} className="news-modal">
-      <div className="news-live-head"><div className="news-live-label"><span className="status-dot" />ACTUALIZACI&Oacute;N CONTINUA</div></div>
-      <div className="dialog-filter-tabs">{['Últimas', 'Mercados', 'Cripto', 'Divisas', 'Materias primas', 'Editorial'].map((category) => <button key={category} className={filter === category ? 'active' : ''} onClick={() => setFilter(category)}>{category}</button>)}</div>
+    <Modal title={t('newsModal.title')} onClose={onClose} className="news-modal">
+      <div className="news-live-head"><div className="news-live-label"><span className="status-dot" />{t('newsModal.liveLabel')}</div></div>
+      <div className="dialog-filter-tabs">{filters.map((item) => <button key={item.id} className={filter === item.id ? 'active' : ''} onClick={() => setFilter(item.id)}>{item.label}</button>)}</div>
       <div className="news-dialog-list">
-        {filter === 'Editorial' ? ARTICLES.map((article) => <button key={article.id} className="news-dialog-item" onClick={() => onArticle(article)}><img src={article.image} alt={article.alt} /><span><small>{article.category} &middot; {article.readTime}</small><strong>{article.title}</strong><span>{article.summary}</span></span><ChevronRight size={18} /></button>)
-          : news.length ? news.map((item) => { const feedArticle = articleFromFeed(item); return <button key={item.id} className="news-dialog-item" onClick={() => onArticle(feedArticle)}><img src={feedArticle.image} alt={feedArticle.alt} /><span><small className="news-item-category">{item.category} &middot; <em>{item.source ? `Fuente: ${item.source} \u00b7 ` : ''}{relativeTime(item.createdAt)}</em></small><strong>{item.title}</strong><span>{item.summary}</span></span><ChevronRight size={18} /></button>; })
-          : <div className="empty-state"><Bookmark size={30} /><h3>Sin novedades en esta secci&oacute;n</h3><p>El feed se renueva continuamente; revisa &Uacute;ltimas noticias en unos instantes.</p></div>}
+        {filter === 'editorial' ? ARTICLES.map((article) => <button key={article.id} className="news-dialog-item" onClick={() => onArticle(article)}><img src={article.image} alt={article.alt} /><span><small>{article.category} &middot; {article.readTime}</small><strong>{article.title}</strong><span>{article.summary}</span></span><ChevronRight size={18} /></button>)
+          : news.length ? news.map((item) => { const feedArticle = articleFromFeed(item, lang); return <button key={item.id} className="news-dialog-item" onClick={() => onArticle(feedArticle)}><img src={feedArticle.image} alt={feedArticle.alt} /><span><small className="news-item-category">{item.category} &middot; <em>{item.source ? `${t('article.sourcePrefix', { source: item.source })} \u00b7 ` : ''}{relativeTime(item.createdAt)}</em></small><strong>{item.title}</strong><span>{item.summary}</span></span><ChevronRight size={18} /></button>; })
+          : <div className="empty-state"><Bookmark size={30} /><h3>{t('newsModal.emptyTitle')}</h3><p>{t('newsModal.emptyDesc')}</p></div>}
       </div>
     </Modal>
   );
 }
 
 export function CommunityDialog({ onClose, onAsset }: BaseProps & { onAsset: (asset: Asset) => void }) {
-  const [filter, setFilter] = useState('Todas');
+  const [filter, setFilter] = useState('all');
   const { liveOf } = useLive();
+  const { t, lang } = useI18n();
   const ideas = [
-    { name: 'Ana Mar\u00edn', handle: 'ana.markets', asset: 'SPX', category: '\u00cdndices', title: 'S&P 500: la importancia de mirar el contexto', text: 'Antes de seguir una tendencia, comparo la amplitud del mercado con el volumen. Un movimiento respaldado por m\u00e1s sectores cuenta una historia muy distinta a uno aislado.', color: '#e9e0fc' },
-    { name: 'Daniel Rojas', handle: 'dani.crypto', asset: 'BTCUSD', category: 'Cripto', title: 'Bitcoin y el valor de tener un plan', text: 'Los movimientos de corto plazo no deber\u00edan cambiar un horizonte de largo plazo. Estos son los niveles que estoy observando en mi escenario de base, con el riesgo siempre definido.', color: '#e2ede2' },
-    { name: 'Laura S\u00e1nchez', handle: 'laura.invest', asset: 'NVDA', category: 'Acciones', title: 'Semiconductores: m\u00e1s all\u00e1 del titular', text: 'Los resultados y las expectativas no siempre avanzan al mismo ritmo. Mirar los m\u00e1rgenes junto a los ingresos ayuda a poner las valoraciones en perspectiva.', color: '#f4e6d7' },
-    { name: 'Marcos Pe\u00f1a', handle: 'mpena.forex', asset: 'EURUSD', category: 'Divisas', title: 'EUR/USD y el diferencial de tipos', text: 'Cuando el mercado cambia de expectativas sobre los bancos centrales, el cruce lo nota r\u00e1pido. Sigo el diferencial de tipos antes que el ruido intrad\u00eda.', color: '#e0ecf7' },
-    { name: 'Sof\u00eda Iglesias', handle: 'sofia.macro', asset: 'US10Y', category: 'Renta fija', title: 'La renta fija vuelve al centro del debate', text: 'El bono a diez a\u00f1os es la referencia que ordena el resto de activos. Un repunte de rentabilidad tensiona crecimiento y valoraciones casi al mismo tiempo.', color: '#f3e2ea' },
-    { name: 'Javier N\u00fa\u00f1ez', handle: 'javi.energy', asset: 'CL1!', category: 'Materias primas', title: 'Petr\u00f3leo: oferta, demanda y geopolitica', text: 'En energ\u00eda, los inventarios y las decisiones de producci\u00f3n pesan m\u00e1s que cualquier titular puntual. Prefiero reaccionar a los datos que anticiparlos.', color: '#f7f0d8' },
-    { name: 'Carla Dom\u00ednguez', handle: 'carla.etf', asset: 'SPY', category: 'Fondos', title: 'Indexarse no significa no analizar', text: 'Un ETF diversificado sigue siendo una decisi\u00f3n activa: eliges mercado, coste y horizonte. Reviso la composici\u00f3n al menos dos veces al a\u00f1o.', color: '#e6e6f5' },
-    { name: 'Tom\u00e1s Bravo', handle: 'tomas.riesgo', asset: 'IBEX', category: '\u00cdndices', title: 'Gesti\u00f3n del riesgo antes que rentabilidad', text: 'Defino el tama\u00f1o de cada posici\u00f3n antes de mirar el gr\u00e1fico. As\u00ed una buena idea no se convierte en un mal resultado por exceso de confianza.', color: '#dff0e6' },
-  ].filter((idea) => filter === 'Todas' || idea.category === filter);
+    { name: 'Ana Mar\u00edn', handle: 'ana.markets', asset: 'SPX', tag: 'indices', category: t('community.indices'), title: 'S&P 500: la importancia de mirar el contexto', titleEn: 'S&P 500: the importance of context', text: 'Antes de seguir una tendencia, comparo la amplitud del mercado con el volumen. Un movimiento respaldado por m\u00e1s sectores cuenta una historia muy distinta a uno aislado.', textEn: 'Before following a trend, I compare market breadth with volume. A move backed by more sectors tells a very different story than an isolated one.', color: '#e9e0fc' },
+    { name: 'Daniel Rojas', handle: 'dani.crypto', asset: 'BTCUSD', tag: 'crypto', category: t('community.crypto'), title: 'Bitcoin y el valor de tener un plan', titleEn: 'Bitcoin and the value of a plan', text: 'Los movimientos de corto plazo no deber\u00edan cambiar un horizonte de largo plazo. Estos son los niveles que estoy observando en mi escenario de base, con el riesgo siempre definido.', textEn: 'Short-term moves should not change a long-term horizon. These are the levels I am watching in my base scenario, with risk always defined.', color: '#e2ede2' },
+    { name: 'Laura S\u00e1nchez', handle: 'laura.invest', asset: 'NVDA', tag: 'stocks', category: t('community.stocks'), title: 'Semiconductores: m\u00e1s all\u00e1 del titular', titleEn: 'Semiconductors: beyond the headline', text: 'Los resultados y las expectativas no siempre avanzan al mismo ritmo. Mirar los m\u00e1rgenes junto a los ingresos ayuda a poner las valoraciones en perspectiva.', textEn: 'Results and expectations do not always move at the same pace. Looking at margins alongside revenue helps put valuations in perspective.', color: '#f4e6d7' },
+    { name: 'Marcos Pe\u00f1a', handle: 'mpena.forex', asset: 'EURUSD', tag: 'forex', category: t('community.forex'), title: 'EUR/USD y el diferencial de tipos', titleEn: 'EUR/USD and the rate differential', text: 'Cuando el mercado cambia de expectativas sobre los bancos centrales, el cruce lo nota r\u00e1pido. Sigo el diferencial de tipos antes que el ruido intrad\u00eda.', textEn: 'When the market changes expectations about central banks, the pair notices quickly. I follow the rate differential rather than intraday noise.', color: '#e0ecf7' },
+    { name: 'Sof\u00eda Iglesias', handle: 'sofia.macro', asset: 'US10Y', tag: 'fixed', category: t('community.indices'), title: 'La renta fija vuelve al centro del debate', titleEn: 'Fixed income is back at the center of the debate', text: 'El bono a diez a\u00f1os es la referencia que ordena el resto de activos. Un repunte de rentabilidad tensiona crecimiento y valoraciones casi al mismo tiempo.', textEn: 'The ten-year bond is the reference that orders the rest of the assets. A rise in yields pressures growth and valuations almost at the same time.', color: '#f3e2ea' },
+    { name: 'Javier N\u00fa\u00f1ez', handle: 'javi.energy', asset: 'CL1!', tag: 'commodities', category: t('community.commodities'), title: 'Petr\u00f3leo: oferta, demanda y geopolitica', titleEn: 'Oil: supply, demand and geopolitics', text: 'En energ\u00eda, los inventarios y las decisiones de producci\u00f3n pesan m\u00e1s que cualquier titular puntual. Prefiero reaccionar a los datos que anticiparlos.', textEn: 'In energy, inventories and production decisions weigh more than any single headline. I prefer reacting to data rather than anticipating it.', color: '#f7f0d8' },
+    { name: 'Carla Dom\u00ednguez', handle: 'carla.etf', asset: 'SPY', tag: 'funds', category: t('community.stocks'), title: 'Indexarse no significa no analizar', titleEn: 'Indexing does not mean not analyzing', text: 'Un ETF diversificado sigue siendo una decisi\u00f3n activa: eliges mercado, coste y horizonte. Reviso la composici\u00f3n al menos dos veces al a\u00f1o.', textEn: 'A diversified ETF is still an active decision: you choose market, cost and horizon. I review the composition at least twice a year.', color: '#e6e6f5' },
+    { name: 'Tom\u00e1s Bravo', handle: 'tomas.riesgo', asset: 'IBEX', tag: 'indices', category: t('community.indices'), title: 'Gesti\u00f3n del riesgo antes que rentabilidad', titleEn: 'Risk management before returns', text: 'Defino el tama\u00f1o de cada posici\u00f3n antes de mirar el gr\u00e1fico. As\u00ed una buena idea no se convierte en un mal resultado por exceso de confianza.', textEn: 'I define the size of each position before looking at the chart. That way a good idea does not become a bad result from overconfidence.', color: '#dff0e6' },
+  ].filter((idea) => filter === 'all' || idea.tag === filter);
+  const filters = [
+    { id: 'all', label: t('community.all') },
+    { id: 'indices', label: t('community.indices') },
+    { id: 'crypto', label: t('community.crypto') },
+    { id: 'stocks', label: t('community.stocks') },
+    { id: 'forex', label: t('community.forex') },
+    { id: 'commodities', label: t('community.commodities') },
+  ];
   return (
-    <Modal title="Las ideas se ven mejor en comunidad" onClose={onClose} className="community-modal">
-      <p className="modal-intro">Otras miradas. Nuevas perspectivas. Tu propio criterio.</p><div className="dialog-filter-tabs">{['Todas', '\u00cdndices', 'Cripto', 'Acciones', 'Divisas', 'Materias primas'].map((category) => <button key={category} className={filter === category ? 'active' : ''} onClick={() => setFilter(category)}>{category}</button>)}</div>
-      <div className="community-ideas">{ideas.map((idea) => <article key={idea.handle} className="community-idea" tabIndex={0} role="button" onClick={() => onAsset(liveOf(getAssetOrFallback(idea.asset)))} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onAsset(liveOf(getAssetOrFallback(idea.asset))); } }}><div className="idea-author"><span style={{ background: idea.color }}><UserRound size={19} /></span><div><strong>{idea.name}</strong><small>@{idea.handle}</small></div><span className="idea-category">{idea.category}</span></div><h3>{idea.title}</h3><p>{idea.text}</p><button className="text-button" tabIndex={-1} onClick={(event) => { event.stopPropagation(); onAsset(liveOf(getAssetOrFallback(idea.asset))); }}>Explorar {idea.asset}<ArrowRight size={15} /></button></article>)}</div><div className="dialog-footnote"><Info size={15} />Perfiles e ideas generados para ilustrar la experiencia de comunidad. No es asesoramiento financiero.</div>
+    <Modal title={t('community.title')} onClose={onClose} className="community-modal">
+      <p className="modal-intro">{t('community.intro')}</p><div className="dialog-filter-tabs">{filters.map((item) => <button key={item.id} className={filter === item.id ? 'active' : ''} onClick={() => setFilter(item.id)}>{item.label}</button>)}</div>
+      <div className="community-ideas">{ideas.map((idea) => <article key={idea.handle} className="community-idea" tabIndex={0} role="button" onClick={() => onAsset(liveOf(getAssetOrFallback(idea.asset)))} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onAsset(liveOf(getAssetOrFallback(idea.asset))); } }}><div className="idea-author"><span style={{ background: idea.color }}><UserRound size={19} /></span><div><strong>{idea.name}</strong><small>@{idea.handle}</small></div><span className="idea-category">{idea.category}</span></div><h3>{lang === 'en' ? idea.titleEn : idea.title}</h3><p>{lang === 'en' ? idea.textEn : idea.text}</p><button className="text-button" tabIndex={-1} onClick={(event) => { event.stopPropagation(); onAsset(liveOf(getAssetOrFallback(idea.asset))); }}>{t('community.explore', { name: idea.asset })}<ArrowRight size={15} /></button></article>)}</div><div className="dialog-footnote"><Info size={15} />{t('community.footnote')}</div>
     </Modal>
   );
 }
 
 export function HelpDialog({ onClose }: BaseProps) {
+  const { t } = useI18n();
+  const faq = [
+    { q: t('help.q1'), a: t('help.a1') },
+    { q: t('help.q2'), a: t('help.a2') },
+    { q: t('help.q3'), a: t('help.a3') },
+    { q: t('help.q4'), a: t('help.a4') },
+    { q: t('help.q5'), a: t('help.a5') },
+    { q: t('help.q6'), a: t('help.a6') },
+  ];
   return (
-    <Modal title={'Una mirada m\u00e1s clara'} onClose={onClose} className="help-modal">
-      <p className="modal-intro">Todo lo que necesitas saber sobre esta experiencia.</p>
-      <div className="help-faq"><details open><summary>&iquest;Los precios son en tiempo real?</summary><p>S&iacute;. Durante la sesi&oacute;n de cada mercado, las cotizaciones se actualizan de forma continua y el gr&aacute;fico refleja la evoluci&oacute;n del precio conforme se mueve. Cuando un mercado est&aacute; cerrado o en un intervalo de subasta, la plataforma mantiene la &uacute;ltima referencia disponible.</p></details><details><summary>&iquest;De d&oacute;nde proceden los datos de mercado?</summary><p>Consolidamos las cotizaciones de mercados de referencia y las normalizamos en una sola plataforma con criterios profesionales de calidad y coherencia. La cobertura alcanza bolsas, divisas, criptodivisas, futuros, materias primas y renta fija de todo el mundo.</p></details><details><summary>&iquest;C&oacute;mo se eligen los s&iacute;mbolos disponibles?</summary><p>La plataforma incluye una selecci&oacute;n curada de los mercados m&aacute;s relevantes y, adem&aacute;s, permite buscar e incorporar cualquier activo cotizado en el mundo a trav&eacute;s de la b&uacute;squeda global.</p></details><details><summary>&iquest;D&oacute;nde se guardan mis favoritos?</summary><p>Tu lista de seguimiento, alertas, noticias guardadas y preferencias se conservan en el almacenamiento local de este navegador. No se transmiten a servidores externos y permanecen privados en tu dispositivo.</p></details><details><summary>&iquest;Puedo comprar o vender activos?</summary><p>Tribuno es una plataforma de an&aacute;lisis e informaci&oacute;n. No permite ejecutar operaciones ni ofrece recomendaciones de inversi&oacute;n personalizadas.</p></details><details><summary>&iquest;C&oacute;mo exploro los gr&aacute;ficos?</summary><p>Selecciona un activo y elige un periodo. Mueve el cursor por el gr&aacute;fico para consultar precios y vol&uacute;menes, o usa las flechas del teclado cuando tenga el foco. Puedes alternar entre l&iacute;neas y velas, y la esquina superior muestra la evoluci&oacute;n de los &uacute;ltimos segundos.</p></details></div>
-      <div className="keyboard-shortcuts"><span>Buscar un activo</span><span><kbd>Ctrl</kbd> + <kbd>K</kbd></span></div><div className="keyboard-shortcuts"><span>Cerrar una ventana</span><kbd>Esc</kbd></div>
+    <Modal title={t('help.title')} onClose={onClose} className="help-modal">
+      <p className="modal-intro">{t('help.intro')}</p>
+      <div className="help-faq">{faq.map((item, index) => <details key={item.q} open={index === 0}><summary>{item.q}</summary><p>{item.a}</p></details>)}</div>
+      <div className="keyboard-shortcuts"><span>{t('help.search')}</span><span><kbd>Ctrl</kbd> + <kbd>K</kbd></span></div><div className="keyboard-shortcuts"><span>{t('help.close')}</span><kbd>Esc</kbd></div>
     </Modal>
   );
 }

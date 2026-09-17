@@ -79,9 +79,9 @@ export async function publishReport(userId: string, symbol: string | null, title
 
 export function friendlyAuthError(message: string): string {
   const value = message.toLowerCase();
-  if (value.includes('invalid login')) return 'Correo o contrase\u00f1a incorrectos.';
-  if (value.includes('already registered') || value.includes('already exists')) return 'Ese correo ya tiene una cuenta. Inicia sesi\u00f3n.';
-  if (value.includes('password should be')) return 'La contrase\u00f1a debe tener al menos 6 caracteres.';
-  if (value.includes('email')) return 'Revisa el correo introducido.';
-  return 'No pudimos completar la operaci\u00f3n. Int\u00e9ntalo de nuevo.';
+  if (value.includes('invalid login')) return 'auth.errInvalid';
+  if (value.includes('already registered') || value.includes('already exists')) return 'auth.errAlready';
+  if (value.includes('password should be')) return 'auth.errPassword';
+  if (value.includes('email')) return 'auth.errEmail';
+  return 'auth.errGeneric';
 }

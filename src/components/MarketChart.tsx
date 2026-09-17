@@ -5,6 +5,7 @@ import { type Asset, formatPrice } from '../data/markets';
 import { useSeries } from '../data/series';
 import { useLive } from '../data/live';
 import { BrandMark } from './MarketLogo';
+import { useI18n } from '../i18n';
 
 export const PERIODS = ['1D', '5D', '1M', '3M', '6M', 'YTD', '1A', 'Todo'] as const;
 export type Period = typeof PERIODS[number];
@@ -37,6 +38,7 @@ export function makeSeries(asset: Asset, period: SeriesPeriod = '1D', count = 15
 }
 
 export function Sparkline({ asset, selected = false, width = 96, height = 34, monochrome = false, period = '7D', onOpen }: { asset: Asset; selected?: boolean; width?: number; height?: number; monochrome?: boolean; period?: SeriesPeriod; onOpen?: () => void }) {
+  const { t } = useI18n();
   const { points } = useSeries(asset, period as Period);
   const values = useMemo(() => points.map((point) => point.close), [points]);
   const min = Math.min(...values);
@@ -47,7 +49,7 @@ export function Sparkline({ asset, selected = false, width = 96, height = 34, mo
   const color = selected || monochrome ? '#2962ff' : change >= 0 ? '#089981' : '#f23645';
   const id = useId().replace(/:/g, '');
   return (
-    <button className="sparkline sparkline-button" style={{ width, height }} aria-label={`Ver gr\u00e1fico de ${asset.shortName}`} title={'Abrir gr\u00e1fico'} onClick={onOpen} role="img">
+    <button className="sparkline sparkline-button" style={{ width, height }} aria-label={t('spark.aria', { name: asset.shortName })} title={t('spark.open')} onClick={onOpen} role="img">
       <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} aria-hidden="true">
         <defs><linearGradient id={`spark-${id}`} x1="0" y1="0" x2="0" y2="1"><stop stopColor={color} stopOpacity="0.13" /><stop offset="1" stopColor={color} stopOpacity="0" /></linearGradient></defs>
         <path d={`${path} L${width},${height} L0,${height} Z`} fill={`url(#spark-${id})`} />
@@ -64,15 +66,16 @@ interface ChartProps {
   expanded?: boolean;
 }
 
-function formatTime(time: number, period: Period): string {
+function formatTime(time: number, period: Period, locale: string): string {
   const date = new Date(time * 1000);
-  if (period === '1D') return date.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
-  return date.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' });
+  if (period === '1D') return date.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
+  return date.toLocaleDateString(locale, { day: 'numeric', month: 'short' });
 }
 
 export default function MarketChart({ asset, period, onPeriodChange, expanded = false }: ChartProps) {
   const id = useId().replace(/:/g, '');
   const reduceMotion = useReducedMotion();
+  const { t, locale, lang } = useI18n();
   const canvasRef = useRef<HTMLDivElement>(null);
   const [canvasWidth, setCanvasWidth] = useState(1000);
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
@@ -126,7 +129,7 @@ export default function MarketChart({ asset, period, onPeriodChange, expanded = 
     <div className={`market-chart ${expanded ? 'expanded' : ''}`}>
       <div className="chart-canvas" ref={canvasRef}>
         <svg className="main-chart-svg" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" role="img"
-          aria-label={`Gr\u00e1fico de ${asset.name}, periodo ${period}. Usa las flechas para explorar.`} tabIndex={0}
+          aria-label={t('chart.aria', { name: asset.name, period })} tabIndex={0}
           onPointerMove={(event) => {
             const bounds = event.currentTarget.getBoundingClientRect();
             const pointerX = (event.clientX - bounds.left) / bounds.width * width;
@@ -189,7 +192,7 @@ export default function MarketChart({ asset, period, onPeriodChange, expanded = 
                 <rect width="88" height="33" rx="5" fill="var(--surface)" opacity="0.92" stroke="var(--line)" strokeWidth="1" />
                 <path d={`M${trailPath} L81,30 L3,30 Z`} fill={`url(#trail-fill-${id})`} opacity="0.9" />
                 <path d={`M${trailPath}`} fill="none" stroke="#089981" strokeWidth="1.5" strokeLinejoin="round" />
-                <text x="5" y="9" className="chart-axis-text" fontSize="7.5">\u00daltimos 60 s</text>
+                <text x="5" y="9" className="chart-axis-text" fontSize="7.5">{t('chart.last60')}</text>
               </g>; })()}
             </g>
           )}
@@ -201,12 +204,12 @@ export default function MarketChart({ asset, period, onPeriodChange, expanded = 
             return idxs.map((index, i) => {
               const point = active[Math.max(0, Math.min(index, active.length - 1))];
               if (!point) return null;
-              const label = formatTime(point.time, period);
+              const label = formatTime(point.time, period, locale);
               const first = i === 0;
               const last = i === idxs.length - 1;
               return <text key={`${label}-${index}`} x={xAt(index)} y={height - 4} textAnchor={first ? 'start' : last ? 'end' : 'middle'} className="chart-axis-text">{label}</text>;
             });
-          })() : <text x={8} y={height - 4} className="chart-axis-text" textAnchor="start">{period === '1D' ? '09:30' : 'Hoy'}</text>}
+          })() : <text x={8} y={height - 4} className="chart-axis-text" textAnchor="start">{period === '1D' ? '09:30' : t('agenda.today')}</text>}
           {activeIndex !== null && hoverValue !== null && (
             <g className="chart-crosshair">
               <line x1={xAt(activeIndex)} x2={xAt(activeIndex)} y1="4" y2={plotHeight} stroke="var(--muted)" strokeDasharray="4 4" strokeWidth="0.8" />
@@ -216,24 +219,24 @@ export default function MarketChart({ asset, period, onPeriodChange, expanded = 
                 <rect x={Math.min(plotWidth - 156, Math.max(6, xAt(activeIndex) - 78))} y="34" width="142" height={hoverPoint ? 62 : 30} rx="5" fill="var(--text)" opacity="0.96" />
                 <text x={Math.min(plotWidth - 62, Math.max(82, xAt(activeIndex)))} y="53" textAnchor="middle" fontSize="13" fontWeight="650" fill="var(--surface)">{formatPrice(hoverValue, asset.decimals)} {asset.currency}</text>
                 {hoverPoint && active && (
-                  <text x={Math.min(plotWidth - 62, Math.max(82, xAt(activeIndex)))} y="72" textAnchor="middle" fontSize="9" fill="var(--surface)" opacity="0.75">{formatTime(hoverPoint.time, period)} · A {formatPrice(hoverPoint.open, asset.decimals)} · M {formatPrice(hoverPoint.high, asset.decimals)} · m {formatPrice(hoverPoint.low, asset.decimals)}</text>
+                  <text x={Math.min(plotWidth - 62, Math.max(82, xAt(activeIndex)))} y="72" textAnchor="middle" fontSize="9" fill="var(--surface)" opacity="0.75">{formatTime(hoverPoint.time, period, locale)} · {lang === 'en' ? 'O' : 'A'} {formatPrice(hoverPoint.open, asset.decimals)} · {lang === 'en' ? 'H' : 'M'} {formatPrice(hoverPoint.high, asset.decimals)} · {lang === 'en' ? 'L' : 'm'} {formatPrice(hoverPoint.low, asset.decimals)}</text>
                 )}
               </g>
             </g>
           )}
         </svg>
         <div className="chart-watermark"><BrandMark /></div>
-        {(source === 'api' || animateLive) && <span className="chart-live-badge"><span className="status-dot" />{connected ? 'En vivo' : 'En marcha'}</span>}
+        {(source === 'api' || animateLive) && <span className="chart-live-badge"><span className="status-dot" />{connected ? t('chart.live') : t('chart.on')}</span>}
       </div>
       <div className="chart-bottom-bar">
-        <div className="chart-source-label">{source === 'api' ? 'Cotizaci\u00f3n real' : source === 'loading' ? 'Cargando\u2026' : animateLive ? 'Evoluci\u00f3n de la sesi\u00f3n' : 'Referencia de mercado'}</div>
-        <div className="period-selector" aria-label={'Periodo del gr\u00e1fico'}>
+        <div className="chart-source-label">{source === 'api' ? t('chart.real') : source === 'loading' ? t('chart.loading') : animateLive ? t('chart.evolution') : t('chart.reference')}</div>
+        <div className="period-selector" aria-label={t('chart.periodAria')}>
           {PERIODS.map((item) => <button key={item} className={period === item ? 'active' : ''} aria-pressed={period === item} onClick={() => { setHoverIndex(null); onPeriodChange(item); }}>{item}</button>)}
         </div>
         <div className="chart-display-controls">
           <span className="chart-timezone">UTC</span>
-          <button className={`icon-button ${chartType === 'area' ? 'selected' : ''}`} title={'Gr\u00e1fico de l\u00ednea'} aria-label={'Gr\u00e1fico de l\u00ednea'} aria-pressed={chartType === 'area'} onClick={() => setChartType('area')}><ChartNoAxesCombined size={17} /></button>
-          <button className={`icon-button ${chartType === 'candles' ? 'selected' : ''}`} title={'Gr\u00e1fico de velas'} aria-label={'Gr\u00e1fico de velas'} aria-pressed={chartType === 'candles'} onClick={() => setChartType('candles')}><CandlestickChart size={17} /></button>
+          <button className={`icon-button ${chartType === 'area' ? 'selected' : ''}`} title={t('chart.line')} aria-label={t('chart.line')} aria-pressed={chartType === 'area'} onClick={() => setChartType('area')}><ChartNoAxesCombined size={17} /></button>
+          <button className={`icon-button ${chartType === 'candles' ? 'selected' : ''}`} title={t('chart.candles')} aria-label={t('chart.candles')} aria-pressed={chartType === 'candles'} onClick={() => setChartType('candles')}><CandlestickChart size={17} /></button>
         </div>
       </div>
     </div>

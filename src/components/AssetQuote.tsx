@@ -3,9 +3,11 @@ import { type Asset, formatChange, formatCompact, formatPrice } from '../data/ma
 import { useLive } from '../data/live';
 import MarketLogo from './MarketLogo';
 import { useEffect, useRef, useState } from 'react';
+import { useI18n } from '../i18n';
 
 export default function AssetQuote({ asset, onTitleClick }: { asset: Asset; onTitleClick?: () => void }) {
   const { liveOf } = useLive();
+  const { t } = useI18n();
   const live = liveOf(asset);
   const previous = live.price / (1 + live.change / 100);
   const difference = live.price - previous;
@@ -29,19 +31,19 @@ export default function AssetQuote({ asset, onTitleClick }: { asset: Asset; onTi
       <div className="quote-name-line">
         <MarketLogo key={asset.id} asset={live} size={29} />
         {onTitleClick ? <button className="quote-title" onClick={onTitleClick}>{live.shortName}<ChevronRight size={18} /></button> : <h3 className="quote-title">{live.shortName}</h3>}
-        <span className="quote-exchange">{isLive ? <span className="quote-live-dot" title="Cotización real"><Radio size={11} /></span> : null} {live.exchange} &middot; {live.symbol}</span>
+        <span className="quote-exchange">{isLive ? <span className="quote-live-dot" title={t('chart.real')}><Radio size={11} /></span> : null} {live.exchange} &middot; {live.symbol}</span>
       </div>
       <div className="quote-price-line">
         <span className={`quote-price price-flash ${flash === 'up' ? 'flash-up' : flash === 'down' ? 'flash-down' : ''}`}>{formatPrice(live.price, live.decimals)}</span>
         <span className="quote-currency">{live.currency}</span>
         <span className={`quote-change ${live.change >= 0 ? 'positive' : 'negative'}`}>{difference >= 0 ? '+' : ''}{formatPrice(difference, live.decimals)} ({formatChange(live.change)})</span>
-        <span className="quote-today">{isLive ? 'en vivo' : 'hoy'}</span>
+        <span className="quote-today">{isLive ? t('quote.live') : t('quote.today')}</span>
       </div>
       {isLive && live.volume > 0 && (
-        <div className="quote-volume">Volumen: <strong>{formatCompact(live.volume)}</strong>{live.exchange ? ` · ${live.exchange}` : ''}</div>
+        <div className="quote-volume">{t('quote.volume')} <strong>{formatCompact(live.volume)}</strong>{live.exchange ? ` · ${live.exchange}` : ''}</div>
       )}
       {onTitleClick && (
-        <button className="quote-open" onClick={onTitleClick}>Abrir detalle<ArrowUpRight size={13} /></button>
+        <button className="quote-open" onClick={onTitleClick}>{t('quote.openDetail')}<ArrowUpRight size={13} /></button>
       )}
     </div>
   );
